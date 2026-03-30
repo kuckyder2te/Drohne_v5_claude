@@ -1,5 +1,9 @@
 #pragma once
 
+// ── Test-Modi (auskommentieren = deaktiviert) ──────────────
+// #define TEST_MOTORS
+#define TEST_BAROMETER
+
 // ESC PWM-Parameter (Standard: 1000–2000 µs)
 #define ESC_MIN_US    1000
 #define ESC_MAX_US    2000
