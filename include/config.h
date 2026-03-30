@@ -2,9 +2,9 @@
 
 // ── Test-Modi (auskommentieren = deaktiviert) ──────────────
 // #define TEST_MOTORS
-#define TEST_BAROMETER
-#define TEST_I2C_SCAN
-
+// #define TEST_BAROMETER
+// #define TEST_I2C_SCAN
+#define TEST_KEYBOARD
 
 // ESC PWM-Parameter (Standard: 1000–2000 µs)
 #define ESC_MIN_US    1000
