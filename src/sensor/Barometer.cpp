@@ -11,9 +11,8 @@ bool Barometer::begin() {
         return false;
     }
 
+    _ms5611.setOversampling(OSR_ULTRA_HIGH);
     Serial.println("[BARO] MS5611 gefunden");
-
-    // Referenzdruck aus 10 Messungen mitteln
     delay(100);
     calibrate();
     return true;
@@ -22,15 +21,34 @@ bool Barometer::begin() {
 void Barometer::calibrate() {
     Serial.println("[BARO] Kalibrierung läuft...");
     float sum = 0.0f;
-    for (int i = 0; i < 10; i++) {
+    const int samples = 20;
+    for (int i = 0; i < samples; i++) {
         _ms5611.read();
         sum += _ms5611.getPressure();
-        delay(50);
+        delay(100);
     }
-    _refPressure = sum / 10.0f;
+    _refPressure = sum / samples;
+
+    // Filter mit Nullwert vorbelegen → kein Drift beim Start
+    for (uint8_t i = 0; i < BARO_FILTER_SIZE; i++) {
+        _filterBuf[i] = 0.0f;
+    }
+    _filterFull = true;  // Filter sofort als voll markieren
+
     Serial.print("[BARO] Referenzdruck: ");
     Serial.print(_refPressure);
-    Serial.println(" Pa");
+    Serial.println(" hPa");
+}
+
+float Barometer::_applyFilter(float newValue) {
+    _filterBuf[_filterIdx] = newValue;
+    _filterIdx = (_filterIdx + 1) % BARO_FILTER_SIZE;
+    if (_filterIdx == 0) _filterFull = true;
+
+    uint8_t count = _filterFull ? BARO_FILTER_SIZE : _filterIdx;
+    float sum = 0.0f;
+    for (uint8_t i = 0; i < count; i++) sum += _filterBuf[i];
+    return sum / count;
 }
 
 void Barometer::update() {
@@ -43,9 +61,9 @@ void Barometer::update() {
     _pressure    = _ms5611.getPressure();
     _temperature = _ms5611.getTemperature();
 
-    // Barometrische Höhenformel → Ergebnis in cm
-    // h = 44330 * (1 - (p / p0) ^ (1/5.255))
-    float ratio   = _pressure / _refPressure;
+    float ratio     = _pressure / _refPressure;
     float altitudeM = 44330.0f * (1.0f - pow(ratio, 0.1902949f));
-    _altitudeCm   = altitudeM * 100.0f;
+
+    // Mittelwertfilter anwenden
+    _altitudeCm = _applyFilter(altitudeM * 100.0f);
 }
