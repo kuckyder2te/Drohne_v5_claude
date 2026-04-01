@@ -15,14 +15,14 @@ KeyEvent KeyboardInput::getKey() {
                 if (c == 0x1B) {
                     _escState = 1;  // ESC empfangen
                 } else {
-                    // Normale Tasten
-                    switch (c) {
-                        case 's': case 'S': return KeyEvent::KEY_S;
-                        case 'h': case 'H': return KeyEvent::KEY_H;
-                        case 'r': case 'R': return KeyEvent::KEY_R;
-                    }
-                }
-                break;
+        switch (c) {
+            case 'a': case 'A': return KeyEvent::KEY_A;  // ← neu
+            case 's': case 'S': return KeyEvent::KEY_S;
+            case 'h': case 'H': return KeyEvent::KEY_H;
+            case 'r': case 'R': return KeyEvent::KEY_R;
+        }
+    }
+    break;
 
             case 1:  // ESC empfangen, warte auf [
                 if (c == 0x5B) {

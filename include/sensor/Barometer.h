@@ -9,6 +9,8 @@
 class Barometer {
 public:
     bool begin();
+    
+
     void update();
 
     float getAltitudeCm()  const { return _altitudeCm; }
@@ -16,6 +18,7 @@ public:
     float getTemperature() const { return _temperature; }
 
     void calibrate();
+
 
 private:
     MS5611  _ms5611;
@@ -28,6 +31,8 @@ private:
     float   _filterBuf[BARO_FILTER_SIZE] = {0};
     uint8_t _filterIdx  = 0;
     bool    _filterFull = false;
+
+    bool _autoCorrect = true;
 
     float _applyFilter(float newValue);
 };

@@ -7,9 +7,10 @@ enum class KeyEvent {
     NONE,
     ARROW_UP,
     ARROW_DOWN,
-    KEY_S,      // Stop
-    KEY_H,      // Hilfe
-    KEY_R,      // Rekalibrierung Barometer
+    KEY_S,
+    KEY_H,
+    KEY_R,
+    KEY_A,    // ← neu: ARM
 };
 
 class KeyboardInput {

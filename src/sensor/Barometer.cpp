@@ -74,21 +74,17 @@ float Barometer::_applyFilter(float newValue)
     return sum / count;
 }
 
-void Barometer::update()
-{
+void Barometer::update() {
     int result = _ms5611.read();
-    if (result != MS5611_READ_OK)
-    {
+    if (result != MS5611_READ_OK) {
         Serial.println("[BARO] Lesefehler!");
         return;
     }
 
-    _pressure = _ms5611.getPressure();
+    _pressure    = _ms5611.getPressure();
     _temperature = _ms5611.getTemperature();
 
-    float ratio = _pressure / _refPressure;
+    float ratio     = _pressure / _refPressure;
     float altitudeM = 44330.0f * (1.0f - pow(ratio, 0.1902949f));
-
-    // Mittelwertfilter anwenden
-    _altitudeCm = _applyFilter(altitudeM * 100.0f);
+    _altitudeCm     = _applyFilter(altitudeM * 100.0f);
 }

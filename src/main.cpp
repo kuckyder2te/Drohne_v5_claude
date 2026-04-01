@@ -11,8 +11,8 @@ KeyboardInput keyboard;
 PIDController pid(PID_KP_DEFAULT, PID_KI_DEFAULT, PID_KD_DEFAULT);
 
 // ── Zustandsvariablen ──────────────────────────────────────
-float    targetHeightCm = 0.0f;   // Zielhöhe
-bool     armed          = false;  // Motoren aktiv?
+float    targetHeightCm = 0.0f;
+bool     armed          = false;
 uint32_t lastPidMs      = 0;
 uint32_t lastPrintMs    = 0;
 
@@ -43,7 +43,7 @@ void i2cScan() {
 
 void printHelp() {
     Serial.println("────────────────────────────────────");
-    Serial.println(" Pfeil hoch  = Zielhöhe +10 cm");
+    Serial.println(" Pfeil hoch   = Zielhöhe +10 cm");
     Serial.println(" Pfeil runter = Zielhöhe -10 cm");
     Serial.println(" a = ARM (Motoren ein)");
     Serial.println(" s = DISARM (Motoren aus)");
@@ -53,7 +53,7 @@ void printHelp() {
 }
 
 void disarm() {
-    armed = false;
+    armed          = false;
     targetHeightCm = 0.0f;
     motors.stop();
     pid.reset();
@@ -100,19 +100,15 @@ void setup() {
 #ifndef TEST_MOTORS
 #ifndef TEST_BAROMETER
 #ifndef TEST_KEYBOARD
-    // ── Normalbetrieb ──────────────────────────────────────
     Serial.println(">> Modus: NORMALBETRIEB");
-
     if (!baro.begin()) {
         Serial.println("FEHLER: Barometer! Programm gestoppt.");
         while (true) delay(1000);
     }
-
     motors.begin();
     pid.begin();
     keyboard.begin();
     printHelp();
-
     Serial.println("[CTRL] Bereit — 'a' zum Armen");
 #endif
 #endif
@@ -142,7 +138,7 @@ void loop() {
     Serial.print(baro.getAltitudeCm(), 1);
     Serial.print(" cm  |  Druck: ");
     Serial.print(baro.getPressure(), 2);
-    Serial.print(" Pa  |  Temp: ");
+    Serial.print(" hPa  |  Temp: ");
     Serial.print(baro.getTemperature(), 1);
     Serial.println(" °C");
     delay(500);
@@ -158,6 +154,7 @@ void loop() {
         case KeyEvent::KEY_S:      Serial.println("[KEY] STOP");                       break;
         case KeyEvent::KEY_R:      baro.calibrate();                                   break;
         case KeyEvent::KEY_H:      printHelp();                                        break;
+        case KeyEvent::KEY_A:      Serial.println("[KEY] ARM — nur im Normalbetrieb"); break;
         case KeyEvent::NONE:       break;
     }
     static uint32_t lastPrint = 0;
@@ -174,7 +171,7 @@ void loop() {
 #ifndef TEST_BAROMETER
 #ifndef TEST_KEYBOARD
 
-    // Barometer immer aktualisieren
+    // Barometer aktualisieren
     baro.update();
 
     // Tastatureingabe
@@ -194,6 +191,18 @@ void loop() {
             Serial.println(" cm");
             break;
 
+        case KeyEvent::KEY_A:
+            if (!armed) {
+                Serial.println("[CTRL] Rekalibrierung vor ARM...");
+                baro.calibrate();
+                delay(500);
+                armed          = true;
+                targetHeightCm = 20.0f;
+                pid.reset();
+                Serial.println("[CTRL] ARM — Ziel: 20 cm");
+            }
+            break;
+
         case KeyEvent::KEY_S:
             disarm();
             break;
@@ -211,21 +220,9 @@ void loop() {
             break;
     }
 
-    // ARM per 'a' Taste
-    if (Serial.available()) {
-        char c = Serial.read();
-        if ((c == 'a' || c == 'A') && !armed) {
-            armed = true;
-            targetHeightCm = 20.0f;  // Startziel: 20 cm
-            pid.reset();
-            Serial.println("[CTRL] ARM — Ziel: 20 cm");
-        }
-    }
-
     // PID-Regelkreis — läuft mit PID_INTERVAL_MS
     if (armed && (millis() - lastPidMs >= PID_INTERVAL_MS)) {
         lastPidMs = millis();
-
         float currentHeight = baro.getAltitudeCm();
         float throttle      = pid.compute(targetHeightCm, currentHeight);
         motors.setThrottle((uint16_t)throttle);
