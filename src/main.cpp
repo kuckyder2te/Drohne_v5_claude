@@ -4,6 +4,7 @@
 #include "control/PIDController.h"
 #include "sensor/Barometer.h"
 #include "comm/KeyboardInput.h"
+#include "myLogger.h"
 
 MotorMixer    motors;
 Barometer     baro;
