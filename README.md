@@ -253,3 +253,13 @@ Scannt den I2C-Bus und gibt alle gefundenen Adressen aus.
 - Fehler zuerst beheben, dann weitermachen
 - `pins.h` ist die einzige Wahrheit für alle Pin-Definitionen
 - `.h` in `include/`, `.cpp` in `src/`
+
+
+## Test- und Prüfergebnisse
+
+| Arm Color | Motor nut | Position | PIN | Direction |
+|---|---|---|---|---|
+| red |black | FL | 11 | CW |
+| red | red | FR | 12 | CCW |
+|white | red | BL | 14 | CCW |
+|white | black | BR | 13 | CW |
