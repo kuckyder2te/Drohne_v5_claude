@@ -263,3 +263,10 @@ Scannt den I2C-Bus und gibt alle gefundenen Adressen aus.
 | red | red | FR | 12 | CCW |
 |white | red | BL | 14 | CCW |
 |white | black | BR | 13 | CW |
+
+
+## Änderungen für den Einsatz den PICO 2W
+
+3. Windows Long Path aktivieren — wichtig für den Earle Philhower Core!
+Im Terminal als Administrator:
+reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f
