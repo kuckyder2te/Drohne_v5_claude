@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include "config.h"
 
 #define PID_HZ          20.0f
 #define PID_COEFF_MIN   0.0f
@@ -12,6 +13,7 @@ public:
 
     void  begin();
     float compute(float setpoint, float measured);
+    float getLastThrottle() const { return _lastThrottle; }
     void  reset();
 
     void  setKp(float kp);
@@ -23,6 +25,7 @@ public:
 
 private:
     float _kp, _ki, _kd;
+    float _lastThrottle = ESC_MIN_US;
 
     // PID Zustand
     float _integral    = 0.0f;

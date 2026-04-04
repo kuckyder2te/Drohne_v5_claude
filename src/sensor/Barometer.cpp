@@ -13,7 +13,7 @@ bool Barometer::begin()
         return false;
     }
 
-    _ms5611.setOversampling(OSR_ULTRA_HIGH);
+    _ms5611.setOversampling(OSR_HIGH);
     Serial.println("[BARO] MS5611 gefunden");
 
     // Sensor aufwärmen lassen vor Kalibrierung

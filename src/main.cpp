@@ -290,16 +290,17 @@ void loop()
     }
 
     // Statusausgabe alle 500ms
-    if (millis() - lastPrintMs >= 500)
-    {
-        lastPrintMs = millis();
-        Serial.print("[CTRL] Ziel: ");
-        Serial.print(targetHeightCm, 1);
-        Serial.print(" cm | Ist: ");
-        Serial.print(baro.getAltitudeCm(), 1);
-        Serial.print(" cm | Armed: ");
-        Serial.println(armed ? "JA" : "NEIN");
-    }
+    if (millis() - lastPrintMs >= 500) {
+    lastPrintMs = millis();
+    Serial.print("[CTRL] Ziel: ");
+    Serial.print(targetHeightCm, 1);
+    Serial.print(" cm | Ist: ");
+    Serial.print(baro.getAltitudeCm(), 1);
+    Serial.print(" cm | Throttle: ");
+    Serial.print(pid.getLastThrottle(), 0);  // ← neu
+    Serial.print(" µs | Armed: ");
+    Serial.println(armed ? "JA" : "NEIN");
+}
 
 #endif
 #endif

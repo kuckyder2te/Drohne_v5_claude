@@ -30,32 +30,31 @@ void PIDController::begin() {
 }
 
 float PIDController::compute(float setpoint, float measured) {
-    float now     = millis() / 1000.0f;  // Sekunden
-    float dt      = now - _lastTime;
+    float now = millis() / 1000.0f;
+    float dt  = now - _lastTime;
 
-    // dt absichern — beim ersten Aufruf oder nach reset()
     if (dt <= 0.0f || dt > 1.0f) {
         _lastTime = now;
         return ESC_MIN_US;
     }
 
-    float error = setpoint - measured;
-
-    // Integral mit Anti-Windup
-    _integral += error * dt;
-    _integral  = constrain(_integral, _integralMin, _integralMax);
-
-    // Derivative
+    float error      = setpoint - measured;
+    _integral       += error * dt;
+    _integral        = constrain(_integral, _integralMin, _integralMax);
     float derivative = (error - _lastError) / dt;
 
-    // PID Output
-    float output = (_kp * error) + (_ki * _integral) + (_kd * derivative);
+    // Basis-Offset + PID Output
+    float output = THROTTLE_OFFSET_US
+                 + (_kp * error)
+                 + (_ki * _integral)
+                 + (_kd * derivative);
 
-    // Auf ESC-Bereich begrenzen
-    output = constrain(output + ESC_MIN_US, ESC_MIN_US, ESC_MAX_US);
+    output = constrain(output, ESC_MIN_US, ESC_MAX_US);
 
     _lastError = error;
     _lastTime  = now;
+
+    _lastThrottle = output;
 
     return output;
 }
