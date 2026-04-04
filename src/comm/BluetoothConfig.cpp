@@ -2,37 +2,49 @@
 #include "config.h"
 
 void BluetoothConfig::begin() {
-    Serial1.setTX(PIN_BT_TX);   // ← wichtig für Pico!
-    Serial1.setRX(PIN_BT_RX);   // ← wichtig für Pico!
+    Serial1.setTX(PIN_BT_TX);
+    Serial1.setRX(PIN_BT_RX);
     BT_UART.begin(BT_BAUD);
     BT_UART.println("[BT] Drohne bereit");
-    BT_UART.println("[BT] Befehle: P=x.x | I=x.x | D=x.x | ?");
+    BT_UART.println("[BT] Befehle: P=x.x | I=x.x | D=x.x | S=save | R=reset | ?");
     Serial.println("[BT] Bluetooth bereit");
 }
 
-void BluetoothConfig::update(PIDController& pid) {
+void BluetoothConfig::update(PIDController& pid, Settings& settings) {
     while (BT_UART.available()) {
         char c = BT_UART.read();
-
         if (c == '\n' || c == '\r') {
             if (_buffer.length() > 0) {
-                _processCommand(_buffer, pid);
+                _processCommand(_buffer, pid, settings);
                 _buffer = "";
             }
         } else {
             _buffer += c;
-            // Puffer-Überlauf verhindern
             if (_buffer.length() > 20) _buffer = "";
         }
     }
 }
 
-void BluetoothConfig::_processCommand(const String& cmd, PIDController& pid) {
+void BluetoothConfig::_processCommand(const String& cmd, PIDController& pid, Settings& settings) {
     Serial.print("[BT] Empfangen: ");
     Serial.println(cmd);
 
     if (cmd == "?") {
         _printValues(pid);
+        return;
+    }
+
+    // Speichern
+    if (cmd == "S" || cmd == "s") {
+        settings.save(pid.getKp(), pid.getKi(), pid.getKd());
+        BT_UART.println("[BT] PID gespeichert!");
+        return;
+    }
+
+    // Reset
+    if (cmd == "R" || cmd == "r") {
+        settings.reset();
+        BT_UART.println("[BT] EEPROM zurückgesetzt!");
         return;
     }
 
@@ -47,18 +59,15 @@ void BluetoothConfig::_processCommand(const String& cmd, PIDController& pid) {
     switch (param) {
         case 'P':
             pid.setKp(value);
-            BT_UART.print("[BT] Kp=");
-            BT_UART.println(value, 4);
+            BT_UART.print("[BT] Kp="); BT_UART.println(value, 4);
             break;
         case 'I':
             pid.setKi(value);
-            BT_UART.print("[BT] Ki=");
-            BT_UART.println(value, 4);
+            BT_UART.print("[BT] Ki="); BT_UART.println(value, 4);
             break;
         case 'D':
             pid.setKd(value);
-            BT_UART.print("[BT] Kd=");
-            BT_UART.println(value, 4);
+            BT_UART.print("[BT] Kd="); BT_UART.println(value, 4);
             break;
         default:
             BT_UART.println("[BT] Fehler: Unbekannter Parameter");

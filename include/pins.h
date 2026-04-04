@@ -15,8 +15,8 @@
 #define PIN_RADIO_CSN 17
 
 // Bluetooth HC-06 (UART0)
-// #define PIN_BT_TX     0    
-// #define PIN_BT_RX     1    
+#define PIN_BT_TX   0
+#define PIN_BT_RX   1 
 
 // ── SPI (MPU9250 + NRF24) ─────────────────────────────────
 #define PIN_SPI_MOSI  19   // ⚠️ noch nicht in pins.h — bitte prüfen!

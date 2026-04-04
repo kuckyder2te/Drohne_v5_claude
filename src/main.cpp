@@ -6,6 +6,7 @@
 #include "comm/KeyboardInput.h"
 #include "myLogger.h"
 #include "comm/BluetoothConfig.h"
+#include "storage/Settings.h"
 #include "pins.h"
 
 MotorMixer motors;
@@ -13,6 +14,7 @@ Barometer baro;
 KeyboardInput keyboard;
 PIDController pid(PID_KP_DEFAULT, PID_KI_DEFAULT, PID_KD_DEFAULT);
 BluetoothConfig btConfig;
+Settings settings;
 
 // ── Zustandsvariablen ──────────────────────────────────────
 float targetHeightCm = 0.0f;
@@ -72,12 +74,10 @@ void disarm()
 }
 
 // ── Setup ──────────────────────────────────────────────────
-void setup()
-{
+void setup() {
     Serial.begin(115200);
     delay(2000);
     Serial.println("=== DROHNE PICO BOOT ===");
-    btConfig.begin();
 
 #ifdef TEST_I2C_SCAN
     Wire.setSDA(PIN_SDA);
@@ -94,21 +94,17 @@ void setup()
 
 #ifdef TEST_BAROMETER
     Serial.println(">> Modus: BAROMETER TEST");
-    if (!baro.begin())
-    {
+    if (!baro.begin()) {
         Serial.println("FEHLER: Programm gestoppt.");
-        while (true)
-            delay(1000);
+        while (true) delay(1000);
     }
 #endif
 
 #ifdef TEST_KEYBOARD
     Serial.println(">> Modus: KEYBOARD TEST");
-    if (!baro.begin())
-    {
+    if (!baro.begin()) {
         Serial.println("FEHLER: Barometer nicht gefunden.");
-        while (true)
-            delay(1000);
+        while (true) delay(1000);
     }
     keyboard.begin();
     printHelp();
@@ -118,15 +114,24 @@ void setup()
 #ifndef TEST_BAROMETER
 #ifndef TEST_KEYBOARD
     Serial.println(">> Modus: NORMALBETRIEB");
-    if (!baro.begin())
-    {
+
+    if (!baro.begin()) {
         Serial.println("FEHLER: Barometer! Programm gestoppt.");
-        while (true)
-            delay(1000);
+        while (true) delay(1000);
     }
     motors.begin();
     pid.begin();
     keyboard.begin();
+    btConfig.begin();       // ← hier
+
+    settings.begin();       // ← hier
+    float kp, ki, kd;
+    if (settings.load(kp, ki, kd)) {
+        pid.setKp(kp);
+        pid.setKi(ki);
+        pid.setKd(kd);
+    }
+
     printHelp();
     Serial.println("[CTRL] Bereit — 'a' zum Armen");
 #endif
@@ -223,7 +228,9 @@ void loop()
 
     // Barometer aktualisieren
     baro.update();
-    btConfig.update(pid);
+
+    // Bluetooth PID-Konfiguration
+    btConfig.update(pid, settings);
 
     // Tastatureingabe
     KeyEvent key = keyboard.getKey();

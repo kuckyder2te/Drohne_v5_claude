@@ -14,8 +14,6 @@
 // ── Bluetooth HC-06 (UART0) ────────────────────────────────
 #define BT_UART     Serial1
 #define BT_BAUD     9600
-#define PIN_BT_TX   0
-#define PIN_BT_RX   1
 
 // ── Flugparameter ──────────────────────────────────────────
 #define TARGET_HEIGHT_CM   50
