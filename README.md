@@ -264,6 +264,8 @@ Scannt den I2C-Bus und gibt alle gefundenen Adressen aus.
 |white | red | BL | 14 | CCW |
 |white | black | BR | 13 | CW |
 
+HC6 Name HC-06 PIN 1234
+
 
 ## Änderungen für den Einsatz den PICO 2W
 
