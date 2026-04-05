@@ -18,7 +18,6 @@ BluetoothConfig btConfig;
 Settings settings;
 IMU imu;
 
-
 // ── Zustandsvariablen ──────────────────────────────────────
 float targetHeightCm = 0.0f;
 bool armed = false;
@@ -80,28 +79,21 @@ void disarm()
 void setup()
 {
     Serial.begin(115200);
+
     delay(2000);
     Serial.println("=== DROHNE PICO BOOT ===");
 
 #ifdef TEST_IMU
+    Serial.println(">> Modus: IMU TEST");
     Wire.setSDA(PIN_SDA);
     Wire.setSCL(PIN_SCL);
     Wire.begin();
-
-    // WHO_AM_I Register direkt lesen
-    Wire.beginTransmission(0x68);
-    Wire.write(0x75);  // WHO_AM_I Register
-    Wire.endTransmission(false);
-    Wire.requestFrom(0x68, 1);
-    uint8_t whoami = Wire.read();
-    Serial.print("[IMU] WHO_AM_I: 0x");
-    Serial.println(whoami, HEX);
-    // Erwartete Werte:
-    // 0x71 = echter MPU9250
-    // 0x73 = MPU9255
-    // 0x68 = MPU6050 (kein Magnetometer!)
-    // 0x70 = MPU6500
-    // andere = unbekannter Chip
+    if (!imu.begin())
+    {
+        Serial.println("FEHLER: IMU! Programm gestoppt.");
+        while (true)
+            delay(1000);
+    }
 #endif
 
 #ifdef TEST_I2C_SCAN
@@ -156,9 +148,14 @@ void setup()
 #ifndef TEST_MOTORS
 #ifndef TEST_BAROMETER
 #ifndef TEST_KEYBOARD
-#ifndef TEST_IMU        // ← neu
-#ifndef TEST_I2C_SCAN   // ← neu
+#ifndef TEST_IMU      // ← neu
+#ifndef TEST_I2C_SCAN // ← neu
     Serial.println(">> Modus: NORMALBETRIEB");
+
+    // ← DIESE 3 ZEILEN HIER EINFÜGEN:
+    Wire.setSDA(PIN_SDA);
+    Wire.setSCL(PIN_SCL);
+    Wire.begin();
 
     if (!baro.begin())
     {
@@ -171,6 +168,11 @@ void setup()
     keyboard.begin();
     btConfig.begin(); // ← hier
 
+    // Logger einrichten
+    Logger::setLogLevel(Logger::NOTICE);
+    Logger::setOutputFunction(localLogger);
+    Serial.println("[LOG] Logger bereit (USB + BT)");
+
     settings.begin(); // ← hier
     float kp, ki, kd;
     if (settings.load(kp, ki, kd))
@@ -178,15 +180,20 @@ void setup()
         pid.setKp(kp);
         pid.setKi(ki);
         pid.setKd(kd);
+
+        if (!imu.begin())
+        {
+            Serial.println("WARNUNG: IMU nicht gefunden!");
+        }
     }
 
     printHelp();
     Serial.println("[CTRL] Bereit — 'a' zum Armen");
-#endif  // TEST_I2C_SCAN
-#endif  // TEST_IMU
-#endif  // TEST_KEYBOARD
-#endif  // TEST_BAROMETER
-#endif  // TEST_MOTORS
+#endif // TEST_I2C_SCAN
+#endif // TEST_IMU
+#endif // TEST_KEYBOARD
+#endif // TEST_BAROMETER
+#endif // TEST_MOTORS
 }
 
 // ── Loop ───────────────────────────────────────────────────
@@ -198,9 +205,11 @@ void loop()
     Wire.setSDA(PIN_SDA);
     Wire.setSCL(PIN_SCL);
     Wire.begin();
-    if (!imu.begin()) {
+    if (!imu.begin())
+    {
         Serial.println("FEHLER: IMU! Programm gestoppt.");
-        while (true) delay(1000);
+        while (true)
+            delay(1000);
     }
 #endif
 
