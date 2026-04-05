@@ -1,5 +1,9 @@
 #pragma once
 
+// ── Debug Ausgabe ──────────────────────────────────────────
+#define DEBUG_SERIAL    BT_UART   // ← Ausgabe über Bluetooth
+// #define DEBUG_SERIAL Serial    // ← Ausgabe über USB
+
 // ── Test-Modi (auskommentieren = deaktiviert) ──────────────
 // #define TEST_MOTORS
 // #define TEST_BAROMETER
