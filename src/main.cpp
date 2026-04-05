@@ -18,9 +18,6 @@ BluetoothConfig btConfig;
 Settings settings;
 IMU imu;
 
-#ifdef TEST_IMU
-MPU9250 mpu_test;
-#endif
 
 // ── Zustandsvariablen ──────────────────────────────────────
 float targetHeightCm = 0.0f;
@@ -197,12 +194,14 @@ void loop()
 {
     // ── TEST_IMU ────────────────────────────────────────
 #ifdef TEST_IMU
-    if (mpu_test.update()) {
-        Serial.print("Roll: "); Serial.print(mpu_test.getRoll(), 1);
-        Serial.print(" Pitch: "); Serial.print(mpu_test.getPitch(), 1);
-        Serial.print(" Yaw: "); Serial.println(mpu_test.getYaw(), 1);
+    Serial.println(">> Modus: IMU TEST");
+    Wire.setSDA(PIN_SDA);
+    Wire.setSCL(PIN_SCL);
+    Wire.begin();
+    if (!imu.begin()) {
+        Serial.println("FEHLER: IMU! Programm gestoppt.");
+        while (true) delay(1000);
     }
-    delay(100);
 #endif
 
     // ── TEST_MOTORS ────────────────────────────────────────

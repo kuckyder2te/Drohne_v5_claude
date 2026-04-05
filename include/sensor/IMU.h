@@ -14,16 +14,30 @@ public:
     float getPitch() const { return _pitch; }
     float getYaw()   const { return _yaw; }
 
-    float getAccX()  const { return _mpu.getAccX(); }
-    float getAccY()  const { return _mpu.getAccY(); }
-    float getAccZ()  const { return _mpu.getAccZ(); }
+    float getAccX()  const { return _accelX; }
+    float getAccY()  const { return _accelY; }
+    float getAccZ()  const { return _accelZ; }
 
-    bool  isReady()  const { return _ready; }
+    float getGyroX() const { return _gyroX; }
+    float getGyroY() const { return _gyroY; }
+    float getGyroZ() const { return _gyroZ; }
+
+    bool isReady()   const { return _ready; }
 
 private:
-    MPU9250 _mpu;
-    float   _roll  = 0.0f;
-    float   _pitch = 0.0f;
-    float   _yaw   = 0.0f;
-    bool    _ready = false;
+    MPU9250 _mpu{Wire, 0x68};
+
+    float _roll   = 0.0f;
+    float _pitch  = 0.0f;
+    float _yaw    = 0.0f;
+    float _accelX = 0.0f;
+    float _accelY = 0.0f;
+    float _accelZ = 0.0f;
+    float _gyroX  = 0.0f;
+    float _gyroY  = 0.0f;
+    float _gyroZ  = 0.0f;
+    bool  _ready  = false;
+
+    // Einfache Lageberechnung aus Accelerometer
+    void _calcAngles();
 };
