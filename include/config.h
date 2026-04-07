@@ -1,7 +1,7 @@
 #pragma once
 
 // ── Debug Ausgabe ──────────────────────────────────────────
-#define _MINITERM       // ← USB Serial aktiv
+//#define _MINITERM       // ← USB Serial aktiv
 #define _BT_LOG         // ← Bluetooth Log aktiv
                         // beide auskommentieren = kein Log
 

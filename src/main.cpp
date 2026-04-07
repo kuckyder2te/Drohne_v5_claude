@@ -174,6 +174,7 @@ void setup()
     Serial.println("[LOG] Logger bereit (USB + BT)");
 
     settings.begin(); // ← hier
+
     float kp, ki, kd;
     if (settings.load(kp, ki, kd))
     {
@@ -189,6 +190,7 @@ void setup()
 
     printHelp();
     Serial.println("[CTRL] Bereit — 'a' zum Armen");
+
 #endif // TEST_I2C_SCAN
 #endif // TEST_IMU
 #endif // TEST_KEYBOARD
