@@ -20,7 +20,7 @@ void localLogger(Logger::Level level, const char* module, const char* message) {
     line += message;
 
     // ── Ausgabe auf Serial (USB) ───────────────────────────
-    #ifdef _MINITERM
+    #ifdef _SERIAL_LOG
         Serial.println(line);
     #endif
 

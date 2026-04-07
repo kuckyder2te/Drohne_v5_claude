@@ -1,16 +1,16 @@
 #pragma once
 
 // ── Debug Ausgabe ──────────────────────────────────────────
-//#define _MINITERM       // ← USB Serial aktiv
-#define _BT_LOG         // ← Bluetooth Log aktiv
+// #define _SERIAL_LOG       // ← USB Serial aktiv
+ #define _BT_LOG         // ← Bluetooth Log aktiv
                         // beide auskommentieren = kein Log
 
 // ── Test-Modi (auskommentieren = deaktiviert) ──────────────
 // #define TEST_MOTORS
-// #define TEST_BAROMETER
+ #define TEST_BAROMETER
 // #define TEST_KEYBOARD
 // #define TEST_I2C_SCAN
- #define TEST_IMU 
+// #define TEST_IMU 
 
 // ESC PWM-Parameter (Standard: 1000–2000 µs)
 #define ESC_MIN_US 1000
