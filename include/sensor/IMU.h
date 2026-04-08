@@ -2,42 +2,49 @@
 
 #include <Arduino.h>
 #include <Wire.h>
-#include <MPU9250.h>
 
-class IMU {
+class IMU
+{
 public:
     bool begin();
     bool update();
+    bool begin(bool initWire = false);
     void calibrate();
 
-    float getRoll()  const { return _roll; }
+    float getRoll() const { return _roll; }
     float getPitch() const { return _pitch; }
-    float getYaw()   const { return _yaw; }
+    float getYaw() const { return _yaw; }
 
-    float getAccX()  const { return _accelX; }
-    float getAccY()  const { return _accelY; }
-    float getAccZ()  const { return _accelZ; }
+    float getAccX() const { return _accelX; }
+    float getAccY() const { return _accelY; }
+    float getAccZ() const { return _accelZ; }
 
     float getGyroX() const { return _gyroX; }
     float getGyroY() const { return _gyroY; }
     float getGyroZ() const { return _gyroZ; }
 
-    bool isReady()   const { return _ready; }
+    bool isReady() const { return _ready; }
 
 private:
-    MPU9250 _mpu{Wire, 0x68};
+    // Register-Zugriff
+    void _writeReg(uint8_t reg, uint8_t val);
+    uint8_t _readReg(uint8_t reg);
+    void _calcAngles();
 
-    float _roll   = 0.0f;
-    float _pitch  = 0.0f;
-    float _yaw    = 0.0f;
+    // Messwerte
+    float _roll = 0.0f;
+    float _pitch = 0.0f;
+    float _yaw = 0.0f;
     float _accelX = 0.0f;
     float _accelY = 0.0f;
     float _accelZ = 0.0f;
-    float _gyroX  = 0.0f;
-    float _gyroY  = 0.0f;
-    float _gyroZ  = 0.0f;
-    bool  _ready  = false;
+    float _gyroX = 0.0f;
+    float _gyroY = 0.0f;
+    float _gyroZ = 0.0f;
+    bool _ready = false;
 
-    // Einfache Lageberechnung aus Accelerometer
-    void _calcAngles();
+    // Gyro Bias (Kalibrierung)
+    float _gyroBiasX = 0.0f;
+    float _gyroBiasY = 0.0f;
+    float _gyroBiasZ = 0.0f;
 };

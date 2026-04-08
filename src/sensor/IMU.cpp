@@ -2,12 +2,34 @@
 #include "myLogger.h"
 #include "pins.h"
 
-bool IMU::begin() {
-    // I2C Bus manuell freigeben (Bus-Stuck Recovery)
+// ── Hilfsfunktionen ───────────────────────────────────────
+
+void IMU::_writeReg(uint8_t reg, uint8_t val) {
+    Wire.beginTransmission((uint8_t)0x68);
+    Wire.write(reg);
+    Wire.write(val);
+    Wire.endTransmission();
+}
+
+uint8_t IMU::_readReg(uint8_t reg) {
+    Wire.beginTransmission((uint8_t)0x68);
+    Wire.write(reg);
+    Wire.endTransmission(false);
+    Wire.requestFrom((uint8_t)0x68, (uint8_t)1);
+    if (Wire.available()) {
+        return Wire.read();
+    }
+    return 0xFF;  // Fehler
+}
+
+// ── Initialisierung ───────────────────────────────────────
+
+//bool IMU::begin() {
+    bool IMU::begin(bool initWire) {    // ← ERSTE Zeile der Funktion
+    // I2C Bus Recovery — befreit hängenden Bus nach Reset
+    
     pinMode(PIN_SDA, OUTPUT);
     pinMode(PIN_SCL, OUTPUT);
-
-    // 9 Clock-Pulse senden um hängendes Gerät zu befreien
     digitalWrite(PIN_SDA, HIGH);
     for (int i = 0; i < 9; i++) {
         digitalWrite(PIN_SCL, HIGH);
@@ -23,64 +45,109 @@ bool IMU::begin() {
     digitalWrite(PIN_SDA, HIGH);
     delayMicroseconds(5);
 
+    // Wire initialisieren
+    if (initWire) {
+        Wire.setSDA(PIN_SDA);
+        Wire.setSCL(PIN_SCL);
+        Wire.begin();
+        Wire.setClock(400000);
+    }
     delay(100);
 
-    // Wire normal initialisieren
-    Wire.setSDA(PIN_SDA);
-    Wire.setSCL(PIN_SCL);
-    Wire.begin();
-    Wire.setClock(400000);
-    delay(200);
+    // Software Reset
+    _writeReg(0x6B, 0x80);  // PWR_MGMT_1: DEVICE_RESET
+    delay(100);
+    _writeReg(0x6B, 0x00);  // PWR_MGMT_1: Wake up
+    delay(100);
 
-    int status = _mpu.begin();
-    LOG_FMT("[IMU] begin() status: %d", status);
-
-    if (status < 0) {
-        LOG_FMT("[IMU] ERROR: begin() = %d", status);
+    // WHO_AM_I prüfen
+    uint8_t whoami = _readReg(0x75);
+    LOG_FMT("[IMU] WHO_AM_I: 0x%02X", whoami);
+    if (whoami != 0x71 && whoami != 0x73) {
+        LOG("[IMU] ERROR: Unbekannter Chip!");
         return false;
     }
-    LOG("[IMU] MPU9250 gefunden");
-    _mpu.setDlpfBandwidth(MPU9250::DLPF_BANDWIDTH_20HZ);
+
+    // DLPF auf 20Hz — filtert Vibrationen der Motoren
+    _writeReg(0x1A, 0x04);  // CONFIG: DLPF_CFG = 4 (20Hz)
+    // Gyro ±2000°/s
+    _writeReg(0x1B, 0x18);  // GYRO_CONFIG
+    // Accel ±16g
+    _writeReg(0x1C, 0x18);  // ACCEL_CONFIG
+
     _ready = true;
-    LOG("[IMU] Bereit");
+    LOG("[IMU] MPU9250 bereit");
     return true;
 }
 
-void IMU::calibrate()
-{
-    // Kalibrierung: Nullpunkt der Winkel setzen
-    Serial.println("[IMU] Nullpunkt gesetzt");
+
+// ── Kalibrierung ──────────────────────────────────────────
+
+void IMU::calibrate() {
+    LOG("[IMU] Rekalibrierung — bitte ruhig halten...");
+    // Gyro Bias über 100 Messungen mitteln
+    float bx = 0, by = 0, bz = 0;
+    for (int i = 0; i < 100; i++) {
+        Wire.beginTransmission((uint8_t)0x68);
+        Wire.write((uint8_t)0x43);  // GYRO_XOUT_H
+        Wire.endTransmission(false);
+        Wire.requestFrom((uint8_t)0x68, (uint8_t)6);
+        if (Wire.available() >= 6) {
+            int16_t gx = (Wire.read() << 8) | Wire.read();
+            int16_t gy = (Wire.read() << 8) | Wire.read();
+            int16_t gz = (Wire.read() << 8) | Wire.read();
+            bx += gx;
+            by += gy;
+            bz += gz;
+        }
+        delay(5);
+    }
+    _gyroBiasX = bx / 100.0f;
+    _gyroBiasY = by / 100.0f;
+    _gyroBiasZ = bz / 100.0f;
+    LOG("[IMU] Kalibrierung abgeschlossen");
 }
+
+// ── Update ────────────────────────────────────────────────
 
 bool IMU::update() {
     if (!_ready) return false;
 
-    // Rohwerte direkt lesen — ohne auf readSensor() zu warten
-    _mpu.readSensor();
+    Wire.beginTransmission((uint8_t)0x68);
+    Wire.write((uint8_t)0x3B);  // ACCEL_XOUT_H
+    Wire.endTransmission(false);
+    Wire.requestFrom((uint8_t)0x68, (uint8_t)14);  // 6 Accel + 2 Temp + 6 Gyro
 
-    float ax = _mpu.getAccelX_mss();
-    float ay = _mpu.getAccelY_mss();
-    float az = _mpu.getAccelZ_mss();
+    if (Wire.available() >= 14) {
+        int16_t ax_raw = (Wire.read() << 8) | Wire.read();
+        int16_t ay_raw = (Wire.read() << 8) | Wire.read();
+        int16_t az_raw = (Wire.read() << 8) | Wire.read();
+        Wire.read(); Wire.read();  // Temperatur überspringen
+        int16_t gx_raw = (Wire.read() << 8) | Wire.read();
+        int16_t gy_raw = (Wire.read() << 8) | Wire.read();
+        int16_t gz_raw = (Wire.read() << 8) | Wire.read();
 
-    // Nur aktualisieren wenn sich Werte geändert haben
-    if (ax != _accelX || ay != _accelY || az != _accelZ) {
-        _accelX = ax;
-        _accelY = ay;
-        _accelZ = az;
-        _gyroX  = _mpu.getGyroX_rads();
-        _gyroY  = _mpu.getGyroY_rads();
-        _gyroZ  = _mpu.getGyroZ_rads();
+        // Accel: ±16g Range → m/s²
+        _accelX = ax_raw / 2048.0f * 9.81f;
+        _accelY = ay_raw / 2048.0f * 9.81f;
+        _accelZ = az_raw / 2048.0f * 9.81f;
+
+        // Gyro: ±2000°/s Range → rad/s (mit Bias-Korrektur)
+        _gyroX = (gx_raw - _gyroBiasX) / 16.384f * (M_PI / 180.0f);
+        _gyroY = (gy_raw - _gyroBiasY) / 16.384f * (M_PI / 180.0f);
+        _gyroZ = (gz_raw - _gyroBiasZ) / 16.384f * (M_PI / 180.0f);
+
         _calcAngles();
         return true;
     }
     return false;
 }
 
-void IMU::_calcAngles()
-{
-    _roll = atan2f(_accelY, _accelZ) * 180.0f / M_PI;
+// ── Winkelberechnung ──────────────────────────────────────
+
+void IMU::_calcAngles() {
+    _roll  = atan2f(_accelY, _accelZ) * 180.0f / M_PI;
     _pitch = atan2f(-_accelX,
-                    sqrtf(_accelY * _accelY + _accelZ * _accelZ)) *
-             180.0f / M_PI;
-    _yaw = 0.0f;
+             sqrtf(_accelY * _accelY + _accelZ * _accelZ)) * 180.0f / M_PI;
+    _yaw   = 0.0f;  // Yaw aus Gyro — Phase 3
 }
