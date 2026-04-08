@@ -1,31 +1,25 @@
 #include "sensor/Barometer.h"
+#include "myLogger.h"
 #include "pins.h"
 
-bool Barometer::begin()
-{
+bool Barometer::begin() {
     Wire.setSDA(PIN_SDA);
     Wire.setSCL(PIN_SCL);
     Wire.begin();
 
-    if (!_ms5611.begin())
-    {
-        Serial.println("[BARO] ERROR: MS5611 nicht gefunden!");
+    if (!_ms5611.begin()) {
+        LOG("[BARO] ERROR: MS5611 nicht gefunden!");
         return false;
     }
 
     _ms5611.setOversampling(OSR_HIGH);
-    Serial.println("[BARO] MS5611 gefunden");
+    LOG("[BARO] MS5611 gefunden");
 
-    // Sensor aufwärmen lassen vor Kalibrierung
-    Serial.println("[BARO] Aufwärmzeit 90s läuft...");
-    for (int i = 90; i > 0; i--)
-    {
+    LOG("[BARO] Aufwaermzeit 90s...");
+    for (int i = 90; i > 0; i--) {
         _ms5611.read();
-        if (i % 10 == 0)
-        {
-            Serial.print("[BARO] Noch ");
-            Serial.print(i);
-            Serial.println(" s...");
+        if (i % 10 == 0) {
+            LOG_FMT("[BARO] Noch %d s...", i);
         }
         delay(1000);
     }
@@ -35,49 +29,40 @@ bool Barometer::begin()
     return true;
 }
 
-void Barometer::calibrate()
-{
-    Serial.println("[BARO] Kalibrierung läuft...");
+void Barometer::calibrate() {
+    LOG("[BARO] Kalibrierung laeuft...");
     float sum = 0.0f;
     const int samples = 20;
-    for (int i = 0; i < samples; i++)
-    {
+    for (int i = 0; i < samples; i++) {
         _ms5611.read();
         sum += _ms5611.getPressure();
         delay(100);
     }
     _refPressure = sum / samples;
 
-    // Filter mit Nullwert vorbelegen → kein Drift beim Start
-    for (uint8_t i = 0; i < BARO_FILTER_SIZE; i++)
-    {
+    for (uint8_t i = 0; i < BARO_FILTER_SIZE; i++) {
         _filterBuf[i] = 0.0f;
     }
-    _filterFull = true; // Filter sofort als voll markieren
+    _filterFull = true;
 
-    Serial.print("[BARO] Referenzdruck: ");
-    Serial.print(_refPressure);
-    Serial.println(" hPa");
+    LOG_FMT("[BARO] Referenzdruck: %.2f hPa", _refPressure);
 }
 
-float Barometer::_applyFilter(float newValue)
-{
+float Barometer::_applyFilter(float newValue) {
     _filterBuf[_filterIdx] = newValue;
     _filterIdx = (_filterIdx + 1) % BARO_FILTER_SIZE;
-    if (_filterIdx == 0)
-        _filterFull = true;
+    if (_filterIdx == 0) _filterFull = true;
 
     uint8_t count = _filterFull ? BARO_FILTER_SIZE : _filterIdx;
     float sum = 0.0f;
-    for (uint8_t i = 0; i < count; i++)
-        sum += _filterBuf[i];
+    for (uint8_t i = 0; i < count; i++) sum += _filterBuf[i];
     return sum / count;
 }
 
 void Barometer::update() {
     int result = _ms5611.read();
     if (result != MS5611_READ_OK) {
-        Serial.println("[BARO] Lesefehler!");
+        LOG("[BARO] Lesefehler!");
         return;
     }
 

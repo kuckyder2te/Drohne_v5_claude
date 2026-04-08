@@ -1,4 +1,5 @@
 #include "storage/Settings.h"
+#include "myLogger.h"
 #include "config.h"
 
 void Settings::begin() {

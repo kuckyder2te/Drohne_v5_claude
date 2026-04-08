@@ -1,152 +1,122 @@
 #include <Arduino.h>
+#include "myLogger.h"
 #include "config.h"
+#include "pins.h"
 #include "control/MotorMixer.h"
 #include "control/PIDController.h"
 #include "sensor/Barometer.h"
 #include "comm/KeyboardInput.h"
-#include "myLogger.h"
 #include "comm/BluetoothConfig.h"
 #include "storage/Settings.h"
-#include "pins.h"
 #include "sensor/IMU.h"
 
-MotorMixer motors;
-Barometer baro;
+MotorMixer    motors;
+Barometer     baro;
 KeyboardInput keyboard;
 PIDController pid(PID_KP_DEFAULT, PID_KI_DEFAULT, PID_KD_DEFAULT);
 BluetoothConfig btConfig;
-Settings settings;
-IMU imu;
+Settings      settings;
+IMU           imu;
 
 // ── Zustandsvariablen ──────────────────────────────────────
-float targetHeightCm = 0.0f;
-bool armed = false;
-uint32_t lastPidMs = 0;
-uint32_t lastPrintMs = 0;
+float    targetHeightCm = 0.0f;
+bool     armed          = false;
+uint32_t lastPidMs      = 0;
+uint32_t lastPrintMs    = 0;
 
 // ── Test-Modi ──────────────────────────────────────────────
 #ifdef TEST_MOTORS
 uint16_t currentThrottle = ESC_MIN_US;
-void printMotorHelp()
-{
-    Serial.println("─────────────────────────────");
-    Serial.println(" MOTORTEST: + - s h");
-    Serial.println("─────────────────────────────");
+void printMotorHelp() {
+    LOG("─────────────────────────────");
+    LOG(" MOTORTEST: + - s h");
+    LOG("─────────────────────────────");
 }
 #endif
 
 // ── Hilfsfunktionen ────────────────────────────────────────
-void i2cScan()
-{
-    Serial.println("[I2C] Scanne Bus...");
+void i2cScan() {
+    LOG("[I2C] Scanne Bus...");
     int found = 0;
-    for (uint8_t addr = 1; addr < 127; addr++)
-    {
+    for (uint8_t addr = 1; addr < 127; addr++) {
         Wire.beginTransmission(addr);
-        if (Wire.endTransmission() == 0)
-        {
-            Serial.print("[I2C] Gefunden: 0x");
-            Serial.println(addr, HEX);
+        if (Wire.endTransmission() == 0) {
+            LOG_FMT("[I2C] Gefunden: 0x%02X", addr);
             found++;
         }
     }
-    if (found == 0)
-        Serial.println("[I2C] Kein Gerät!");
+    if (found == 0) LOG("[I2C] Kein Geraet!");
+    LOG_FMT("[I2C] Gesamt: %d Geraet(e)", found);
 }
 
-void printHelp()
-{
-    Serial.println("────────────────────────────────────");
-    Serial.println(" Pfeil hoch   = Zielhöhe +10 cm");
-    Serial.println(" Pfeil runter = Zielhöhe -10 cm");
-    Serial.println(" a = ARM (Motoren ein)");
-    Serial.println(" s = DISARM (Motoren aus)");
-    Serial.println(" r = Barometer rekalibrieren");
-    Serial.println(" h = Hilfe");
-    Serial.println("────────────────────────────────────");
+void printHelp() {
+    LOG("────────────────────────────────────");
+    LOG(" Pfeil hoch   = Zielhoehe +10 cm");
+    LOG(" Pfeil runter = Zielhoehe -10 cm");
+    LOG(" a = ARM (Motoren ein)");
+    LOG(" s = DISARM (Motoren aus)");
+    LOG(" r = Barometer rekalibrieren");
+    LOG(" h = Hilfe");
+    LOG("────────────────────────────────────");
 }
 
-void disarm()
-{
-    armed = false;
+void disarm() {
+    armed          = false;
     targetHeightCm = 0.0f;
     motors.stop();
     pid.reset();
-    Serial.println("[CTRL] DISARM — Motoren gestoppt");
+    LOG("[CTRL] DISARM — Motoren gestoppt");
 }
 
 // ── Setup ──────────────────────────────────────────────────
-void setup()
-{
+void setup() {
     Serial.begin(115200);
-
     delay(2000);
-    Serial.println("=== DROHNE PICO BOOT ===");
 
-    // ← BT immer starten — unabhängig vom Test-Modus
+    // BT zuerst starten — damit LOG() auf BT ausgeben kann
     btConfig.begin();
 
-    // Logger nach BT initialisieren
-    Logger::setLogLevel(Logger::NOTICE);
-    Logger::setOutputFunction(localLogger);
-
-#ifdef TEST_IMU
-    Serial.println(">> Modus: IMU TEST");
-    Wire.setSDA(PIN_SDA);
-    Wire.setSCL(PIN_SCL);
-    Wire.begin();
-    if (!imu.begin())
-    {
-        Serial.println("FEHLER: IMU! Programm gestoppt.");
-        while (true)
-            delay(1000);
-    }
-#endif
+    // Jetzt erst LOG verwenden
+    LOG("=== DROHNE PICO BOOT ===");
 
 #ifdef TEST_I2C_SCAN
     Wire.setSDA(PIN_SDA);
     Wire.setSCL(PIN_SCL);
     Wire.begin();
-    Serial.println("Wire OK, scanne...");
-    int found = 0;
-    for (uint8_t addr = 1; addr < 127; addr++)
-    {
-        Wire.beginTransmission(addr);
-        if (Wire.endTransmission() == 0)
-        {
-            Serial.print("Found: 0x");
-            Serial.println(addr, HEX);
-            found++;
-        }
+    LOG("Wire OK, scanne...");
+    i2cScan();
+#endif
+
+#ifdef TEST_IMU
+    LOG(">> Modus: IMU TEST");
+    Wire.setSDA(PIN_SDA);
+    Wire.setSCL(PIN_SCL);
+    Wire.begin();
+    if (!imu.begin()) {
+        LOG("FEHLER: IMU! Programm gestoppt.");
+        while (true) delay(1000);
     }
-    if (found == 0)
-        Serial.println("Kein Gerät gefunden!");
-    Serial.println("Scan done");
 #endif
 
 #ifdef TEST_MOTORS
-    Serial.println(">> Modus: MOTORTEST");
+    LOG(">> Modus: MOTORTEST");
     printMotorHelp();
     motors.begin();
 #endif
 
 #ifdef TEST_BAROMETER
-    Serial.println(">> Modus: BAROMETER TEST");
-    if (!baro.begin())
-    {
-        Serial.println("FEHLER: Programm gestoppt.");
-        while (true)
-            delay(1000);
+    LOG(">> Modus: BAROMETER TEST");
+    if (!baro.begin()) {
+        LOG("FEHLER: Barometer nicht gefunden.");
+        while (true) delay(1000);
     }
 #endif
 
 #ifdef TEST_KEYBOARD
-    Serial.println(">> Modus: KEYBOARD TEST");
-    if (!baro.begin())
-    {
-        Serial.println("FEHLER: Barometer nicht gefunden.");
-        while (true)
-            delay(1000);
+    LOG(">> Modus: KEYBOARD TEST");
+    if (!baro.begin()) {
+        LOG("FEHLER: Barometer nicht gefunden.");
+        while (true) delay(1000);
     }
     keyboard.begin();
     printHelp();
@@ -155,49 +125,38 @@ void setup()
 #ifndef TEST_MOTORS
 #ifndef TEST_BAROMETER
 #ifndef TEST_KEYBOARD
-#ifndef TEST_IMU      // ← neu
-#ifndef TEST_I2C_SCAN // ← neu
-    Serial.println(">> Modus: NORMALBETRIEB");
+#ifndef TEST_IMU
+#ifndef TEST_I2C_SCAN
+    LOG(">> Modus: NORMALBETRIEB");
 
-    // ← DIESE 3 ZEILEN HIER EINFÜGEN:
     Wire.setSDA(PIN_SDA);
     Wire.setSCL(PIN_SCL);
     Wire.begin();
 
-    if (!baro.begin())
-    {
-        Serial.println("FEHLER: Barometer! Programm gestoppt.");
-        while (true)
-            delay(1000);
+    if (!baro.begin()) {
+        LOG("FEHLER: Barometer! Programm gestoppt.");
+        while (true) delay(1000);
     }
+
     motors.begin();
     pid.begin();
     keyboard.begin();
-    btConfig.begin(); // ← hier
 
-    // Logger einrichten
-    Logger::setLogLevel(Logger::NOTICE);
-    Logger::setOutputFunction(localLogger);
-    Serial.println("[LOG] Logger bereit (USB + BT)");
-
-    settings.begin(); // ← hier
-
+    settings.begin();
     float kp, ki, kd;
-    if (settings.load(kp, ki, kd))
-    {
+    if (settings.load(kp, ki, kd)) {
         pid.setKp(kp);
         pid.setKi(ki);
         pid.setKd(kd);
+    }
 
-        if (!imu.begin())
-        {
-            Serial.println("WARNUNG: IMU nicht gefunden!");
-        }
+    // IMU immer starten — unabhaengig von EEPROM
+    if (!imu.begin()) {
+        LOG("WARNUNG: IMU nicht gefunden!");
     }
 
     printHelp();
-    Serial.println("[CTRL] Bereit — 'a' zum Armen");
-
+    LOG("[CTRL] Bereit — 'a' zum Armen");
 #endif // TEST_I2C_SCAN
 #endif // TEST_IMU
 #endif // TEST_KEYBOARD
@@ -206,46 +165,28 @@ void setup()
 }
 
 // ── Loop ───────────────────────────────────────────────────
-void loop()
-{
-    // ── TEST_IMU ────────────────────────────────────────
+void loop() {
+
+    // ── TEST_IMU ──────────────────────────────────────────
 #ifdef TEST_IMU
-    Serial.println(">> Modus: IMU TEST");
-    Wire.setSDA(PIN_SDA);
-    Wire.setSCL(PIN_SCL);
-    Wire.begin();
-    if (!imu.begin())
-    {
-        Serial.println("FEHLER: IMU! Programm gestoppt.");
-        while (true)
-            delay(1000);
+    imu.update();
+    static uint32_t lastIMU = 0;
+    if (millis() - lastIMU >= 200) {
+        lastIMU = millis();
+        LOG_FMT("[IMU] Roll: %.1f  Pitch: %.1f  Yaw: %.1f",
+            imu.getRoll(), imu.getPitch(), imu.getYaw());
     }
 #endif
 
     // ── TEST_MOTORS ────────────────────────────────────────
 #ifdef TEST_MOTORS
-    if (Serial.available())
-    {
+    if (Serial.available()) {
         char cmd = Serial.read();
-        switch (cmd)
-        {
-        case '+':
-            currentThrottle += THROTTLE_STEP;
-            motors.setThrottle(currentThrottle);
-            break;
-        case '-':
-            currentThrottle -= THROTTLE_STEP;
-            motors.setThrottle(currentThrottle);
-            break;
-        case 's':
-        case 'S':
-            currentThrottle = ESC_MIN_US;
-            motors.stop();
-            break;
-        case 'h':
-        case 'H':
-            printMotorHelp();
-            break;
+        switch (cmd) {
+            case '+': currentThrottle += THROTTLE_STEP; motors.setThrottle(currentThrottle); break;
+            case '-': currentThrottle -= THROTTLE_STEP; motors.setThrottle(currentThrottle); break;
+            case 's': case 'S': currentThrottle = ESC_MIN_US; motors.stop(); break;
+            case 'h': case 'H': printMotorHelp(); break;
         }
     }
 #endif
@@ -253,50 +194,33 @@ void loop()
     // ── TEST_BAROMETER ─────────────────────────────────────
 #ifdef TEST_BAROMETER
     baro.update();
-    Serial.print("[BARO] Höhe: ");
-    Serial.print(baro.getAltitudeCm(), 1);
-    Serial.print(" cm  |  Druck: ");
-    Serial.print(baro.getPressure(), 2);
-    Serial.print(" hPa  |  Temp: ");
-    Serial.print(baro.getTemperature(), 1);
-    Serial.println(" °C");
-    delay(500);
+    static uint32_t lastBaro = 0;
+    if (millis() - lastBaro >= 500) {
+        lastBaro = millis();
+        LOG_FMT("[BARO] Hoehe: %.1f cm | Druck: %.2f hPa | Temp: %.1f C",
+            baro.getAltitudeCm(),
+            baro.getPressure(),
+            baro.getTemperature());
+    }
 #endif
 
     // ── TEST_KEYBOARD ──────────────────────────────────────
 #ifdef TEST_KEYBOARD
     baro.update();
     KeyEvent key = keyboard.getKey();
-    switch (key)
-    {
-    case KeyEvent::ARROW_UP:
-        Serial.println("[KEY] Pfeil HOCH → Throttle +");
-        break;
-    case KeyEvent::ARROW_DOWN:
-        Serial.println("[KEY] Pfeil RUNTER → Throttle -");
-        break;
-    case KeyEvent::KEY_S:
-        Serial.println("[KEY] STOP");
-        break;
-    case KeyEvent::KEY_R:
-        baro.calibrate();
-        break;
-    case KeyEvent::KEY_H:
-        printHelp();
-        break;
-    case KeyEvent::KEY_A:
-        Serial.println("[KEY] ARM — nur im Normalbetrieb");
-        break;
-    case KeyEvent::NONE:
-        break;
+    switch (key) {
+        case KeyEvent::ARROW_UP:   LOG("[KEY] Pfeil HOCH");   break;
+        case KeyEvent::ARROW_DOWN: LOG("[KEY] Pfeil RUNTER"); break;
+        case KeyEvent::KEY_S:      LOG("[KEY] STOP");          break;
+        case KeyEvent::KEY_R:      baro.calibrate();           break;
+        case KeyEvent::KEY_H:      printHelp();                break;
+        case KeyEvent::KEY_A:      LOG("[KEY] ARM — nur im Normalbetrieb"); break;
+        case KeyEvent::NONE:       break;
     }
     static uint32_t lastPrint = 0;
-    if (millis() - lastPrint >= 500)
-    {
+    if (millis() - lastPrint >= 500) {
         lastPrint = millis();
-        Serial.print("[BARO] Höhe: ");
-        Serial.print(baro.getAltitudeCm(), 1);
-        Serial.println(" cm");
+        LOG_FMT("[BARO] Hoehe: %.1f cm", baro.getAltitudeCm());
     }
 #endif
 
@@ -304,85 +228,75 @@ void loop()
 #ifndef TEST_MOTORS
 #ifndef TEST_BAROMETER
 #ifndef TEST_KEYBOARD
+#ifndef TEST_IMU
+#ifndef TEST_I2C_SCAN
 
-    // Barometer aktualisieren
     baro.update();
-
-    // Bluetooth PID-Konfiguration
+    imu.update();
     btConfig.update(pid, settings);
 
-    // Tastatureingabe
     KeyEvent key = keyboard.getKey();
-    switch (key)
-    {
-    case KeyEvent::ARROW_UP:
-        targetHeightCm = constrain(targetHeightCm + 10.0f, THROTTLE_MIN_CM, MAX_HEIGHT_CM);
-        Serial.print("[CTRL] Zielhöhe: ");
-        Serial.print(targetHeightCm);
-        Serial.println(" cm");
-        break;
+    switch (key) {
+        case KeyEvent::ARROW_UP:
+            targetHeightCm = constrain(targetHeightCm + 10.0f, THROTTLE_MIN_CM, MAX_HEIGHT_CM);
+            LOG_FMT("[CTRL] Zielhoehe: %.1f cm", targetHeightCm);
+            break;
 
-    case KeyEvent::ARROW_DOWN:
-        targetHeightCm = constrain(targetHeightCm - 10.0f, THROTTLE_MIN_CM, MAX_HEIGHT_CM);
-        Serial.print("[CTRL] Zielhöhe: ");
-        Serial.print(targetHeightCm);
-        Serial.println(" cm");
-        break;
+        case KeyEvent::ARROW_DOWN:
+            targetHeightCm = constrain(targetHeightCm - 10.0f, THROTTLE_MIN_CM, MAX_HEIGHT_CM);
+            LOG_FMT("[CTRL] Zielhoehe: %.1f cm", targetHeightCm);
+            break;
 
-    case KeyEvent::KEY_A:
-        if (!armed)
-        {
-            Serial.println("[CTRL] Rekalibrierung vor ARM...");
+        case KeyEvent::KEY_A:
+            if (!armed) {
+                LOG("[CTRL] Rekalibrierung vor ARM...");
+                baro.calibrate();
+                delay(500);
+                armed          = true;
+                targetHeightCm = 20.0f;
+                pid.reset();
+                LOG("[CTRL] ARM — Ziel: 20 cm");
+            }
+            break;
+
+        case KeyEvent::KEY_S:
+            disarm();
+            break;
+
+        case KeyEvent::KEY_R:
             baro.calibrate();
-            delay(500);
-            armed = true;
-            targetHeightCm = 20.0f;
             pid.reset();
-            Serial.println("[CTRL] ARM — Ziel: 20 cm");
-        }
-        break;
+            break;
 
-    case KeyEvent::KEY_S:
-        disarm();
-        break;
+        case KeyEvent::KEY_H:
+            printHelp();
+            break;
 
-    case KeyEvent::KEY_R:
-        baro.calibrate();
-        pid.reset();
-        break;
-
-    case KeyEvent::KEY_H:
-        printHelp();
-        break;
-
-    case KeyEvent::NONE:
-        break;
+        case KeyEvent::NONE:
+            break;
     }
 
-    // PID-Regelkreis — läuft mit PID_INTERVAL_MS
-    if (armed && (millis() - lastPidMs >= PID_INTERVAL_MS))
-    {
+    // PID-Regelkreis
+    if (armed && (millis() - lastPidMs >= PID_INTERVAL_MS)) {
         lastPidMs = millis();
         float currentHeight = baro.getAltitudeCm();
-        float throttle = pid.compute(targetHeightCm, currentHeight);
+        float throttle      = pid.compute(targetHeightCm, currentHeight);
         motors.setThrottle((uint16_t)throttle);
     }
 
     // Statusausgabe alle 500ms
-    if (millis() - lastPrintMs >= 500)
-    {
+    if (millis() - lastPrintMs >= 500) {
         lastPrintMs = millis();
-        Serial.print("[CTRL] Ziel: ");
-        Serial.print(targetHeightCm, 1);
-        Serial.print(" cm | Ist: ");
-        Serial.print(baro.getAltitudeCm(), 1);
-        Serial.print(" cm | Throttle: ");
-        Serial.print(pid.getLastThrottle(), 0); // ← neu
-        Serial.print(" µs | Armed: ");
-        Serial.println(armed ? "JA" : "NEIN");
+        LOG_FMT("[CTRL] Ziel: %.1f cm | Ist: %.1f cm | Throttle: %.0f us | Armed: %s",
+            targetHeightCm,
+            baro.getAltitudeCm(),
+            pid.getLastThrottle(),
+            armed ? "JA" : "NEIN");
     }
 
-#endif
-#endif
-#endif
+#endif // TEST_I2C_SCAN
+#endif // TEST_IMU
+#endif // TEST_KEYBOARD
+#endif // TEST_BAROMETER
+#endif // TEST_MOTORS
 }

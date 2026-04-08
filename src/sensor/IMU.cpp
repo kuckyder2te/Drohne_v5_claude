@@ -1,4 +1,5 @@
 #include "sensor/IMU.h"
+#include "myLogger.h"
 #include "pins.h"
 
 bool IMU::begin() {

@@ -1,4 +1,5 @@
 #include "comm/BluetoothConfig.h"
+#include "myLogger.h"
 #include "config.h"
 
 void BluetoothConfig::begin() {
