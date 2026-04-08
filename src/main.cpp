@@ -83,6 +83,13 @@ void setup()
     delay(2000);
     Serial.println("=== DROHNE PICO BOOT ===");
 
+    // ← BT immer starten — unabhängig vom Test-Modus
+    btConfig.begin();
+
+    // Logger nach BT initialisieren
+    Logger::setLogLevel(Logger::NOTICE);
+    Logger::setOutputFunction(localLogger);
+
 #ifdef TEST_IMU
     Serial.println(">> Modus: IMU TEST");
     Wire.setSDA(PIN_SDA);
