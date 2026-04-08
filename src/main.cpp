@@ -86,17 +86,45 @@ void setup() {
     LOG("Wire OK, scanne...");
     i2cScan();
 #endif
-
+/*
 #ifdef TEST_IMU
     LOG(">> Modus: IMU TEST");
     Wire.setSDA(PIN_SDA);
     Wire.setSCL(PIN_SCL);
     Wire.begin();
+    Wire.setClock(400000);  // ← explizit 400kHz setzen
+    delay(500);              // ← war 100ms, jetzt 500ms
     if (!imu.begin()) {
         LOG("FEHLER: IMU! Programm gestoppt.");
         while (true) delay(1000);
     }
 #endif
+*/
+
+#ifdef TEST_IMU
+    LOG(">> Modus: IMU TEST");
+
+    delay(1000);
+    // Wire.setSDA(PIN_SDA);
+    // Wire.setSCL(PIN_SCL);
+    // Wire.begin();
+    // Wire.setClock(400000);
+    // delay(500);
+
+    // WHO_AM_I direkt lesen — vor imu.begin()
+    // Wire.beginTransmission(0x68);
+    // Wire.write(0x75);
+    // Wire.endTransmission(false);
+    // Wire.requestFrom(0x68, 1);
+    // uint8_t whoami = Wire.read();
+    //LOG_FMT("[IMU] WHO_AM_I: 0x%02X", whoami);
+
+    if (!imu.begin()) {
+        LOG("FEHLER: IMU! Programm gestoppt.");
+        while (true) delay(1000);
+    }
+#endif
+
 
 #ifdef TEST_MOTORS
     LOG(">> Modus: MOTORTEST");
@@ -171,10 +199,10 @@ void loop() {
 #ifdef TEST_IMU
     imu.update();
     static uint32_t lastIMU = 0;
-    if (millis() - lastIMU >= 200) {
+    if (millis() - lastIMU >= 100) {  // ← 100ms statt 200ms
         lastIMU = millis();
-        LOG_FMT("[IMU] Roll: %.1f  Pitch: %.1f  Yaw: %.1f",
-            imu.getRoll(), imu.getPitch(), imu.getYaw());
+        LOG_FMT("[IMU] Roll: %.1f  Pitch: %.1f  AccZ: %.2f",
+            imu.getRoll(), imu.getPitch(), imu.getAccZ());
     }
 #endif
 
