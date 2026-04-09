@@ -6,7 +6,6 @@
 class IMU
 {
 public:
-    bool begin();
     bool update();
     bool begin(bool initWire = false);
     void calibrate();

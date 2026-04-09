@@ -200,6 +200,7 @@ void loop()
 {
 
     // ── TEST_IMU ──────────────────────────────────────────
+    /*
 #ifdef TEST_IMU
     imu.update();
     static uint32_t lastIMU = 0;
@@ -207,6 +208,17 @@ void loop()
         lastIMU = millis();
         LOG_FMT("[IMU] Roll: %.1f  Pitch: %.1f  AccZ: %.2f",
                 imu.getRoll(), imu.getPitch(), imu.getAccZ());
+    }
+#endif
+*/
+
+#ifdef TEST_IMU
+    imu.update();
+    static uint32_t lastIMU = 0;
+    if (millis() - lastIMU >= 100) {
+        lastIMU = millis();
+        LOG_FMT("[IMU] Roll: %.1f  Pitch: %.1f  AccZ: %.2f  ready:%d",
+                imu.getRoll(), imu.getPitch(), imu.getAccZ(), imu.isReady());
     }
 #endif
 

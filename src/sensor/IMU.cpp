@@ -24,7 +24,6 @@ uint8_t IMU::_readReg(uint8_t reg) {
 
 // ── Initialisierung ───────────────────────────────────────
 
-//bool IMU::begin() {
     bool IMU::begin(bool initWire) {    // ← ERSTE Zeile der Funktion
     // I2C Bus Recovery — befreit hängenden Bus nach Reset
     
@@ -50,7 +49,7 @@ uint8_t IMU::_readReg(uint8_t reg) {
         Wire.setSDA(PIN_SDA);
         Wire.setSCL(PIN_SCL);
         Wire.begin();
-        Wire.setClock(400000);
+        Wire.setClock(100000);
     }
     delay(100);
 
@@ -114,25 +113,37 @@ bool IMU::update() {
     if (!_ready) return false;
 
     Wire.beginTransmission((uint8_t)0x68);
-    Wire.write((uint8_t)0x3B);  // ACCEL_XOUT_H
-    Wire.endTransmission(false);
-    Wire.requestFrom((uint8_t)0x68, (uint8_t)14);  // 6 Accel + 2 Temp + 6 Gyro
+    Wire.write((uint8_t)0x3B);
+    uint8_t err = Wire.endTransmission(false);
+
+    // Bus-Fehler → Recovery
+    if (err != 0) {
+        LOG_FMT("[IMU] Bus Fehler: %d — Recovery", err);
+        // Bus Recovery
+        Wire.end();
+        delay(10);
+        Wire.setSDA(PIN_SDA);
+        Wire.setSCL(PIN_SCL);
+        Wire.begin();
+        Wire.setClock(100000);
+        return false;
+    }
+
+    Wire.requestFrom((uint8_t)0x68, (uint8_t)14);
 
     if (Wire.available() >= 14) {
         int16_t ax_raw = (Wire.read() << 8) | Wire.read();
         int16_t ay_raw = (Wire.read() << 8) | Wire.read();
         int16_t az_raw = (Wire.read() << 8) | Wire.read();
-        Wire.read(); Wire.read();  // Temperatur überspringen
+        Wire.read(); Wire.read();
         int16_t gx_raw = (Wire.read() << 8) | Wire.read();
         int16_t gy_raw = (Wire.read() << 8) | Wire.read();
         int16_t gz_raw = (Wire.read() << 8) | Wire.read();
+        while (Wire.available()) Wire.read();
 
-        // Accel: ±16g Range → m/s²
         _accelX = ax_raw / 2048.0f * 9.81f;
         _accelY = ay_raw / 2048.0f * 9.81f;
         _accelZ = az_raw / 2048.0f * 9.81f;
-
-        // Gyro: ±2000°/s Range → rad/s (mit Bias-Korrektur)
         _gyroX = (gx_raw - _gyroBiasX) / 16.384f * (M_PI / 180.0f);
         _gyroY = (gy_raw - _gyroBiasY) / 16.384f * (M_PI / 180.0f);
         _gyroZ = (gz_raw - _gyroBiasZ) / 16.384f * (M_PI / 180.0f);
@@ -140,6 +151,7 @@ bool IMU::update() {
         _calcAngles();
         return true;
     }
+    while (Wire.available()) Wire.read();
     return false;
 }
 
