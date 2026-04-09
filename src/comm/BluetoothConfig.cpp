@@ -8,7 +8,7 @@ void BluetoothConfig::begin() {
     BT_UART.begin(BT_BAUD);
     BT_UART.println("[BT] Drohne bereit");
     BT_UART.println("[BT] Befehle: P=x.x | I=x.x | D=x.x | S=save | R=reset | ?");
-    Serial.println("[BT] Bluetooth bereit");
+    LOG("[BT] Bluetooth bereit");
 }
 
 void BluetoothConfig::update(PIDController& pid, Settings& settings) {
@@ -27,9 +27,8 @@ void BluetoothConfig::update(PIDController& pid, Settings& settings) {
 }
 
 void BluetoothConfig::_processCommand(const String& cmd, PIDController& pid, Settings& settings) {
-    Serial.print("[BT] Empfangen: ");
-    Serial.println(cmd);
-
+    LOG_FMT("[BT] Empfangen: %s", cmd.c_str());
+    
     if (cmd == "?") {
         _printValues(pid);
         return;
