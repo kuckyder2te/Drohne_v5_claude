@@ -1,9 +1,10 @@
 #include "comm/KeyboardInput.h"
+#include "myLogger.h"
 
 void KeyboardInput::begin() {
     // Serial bereits in main.cpp gestartet
-    Serial.println("[KEY] Tastatur bereit");
-    Serial.println("[KEY] Pfeiltasten: hoch/runter | s=Stop | r=Rekalibrierung | h=Hilfe");
+    LOG("[KEY] Tastatur bereit");
+    LOG("[KEY] Pfeiltasten: hoch/runter | s=Stop | r=Rekalibrierung | h=Hilfe");
 }
 
 KeyEvent KeyboardInput::getKey() {
