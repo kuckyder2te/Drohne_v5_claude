@@ -33,9 +33,9 @@
 #define EEPROM_SIZE 16
 
 // ── PID Startwerte ─────────────────────────────────────────
-#define PID_KP_DEFAULT 2.0f
-#define PID_KI_DEFAULT 0.03f
-#define PID_KD_DEFAULT 0.3f
+#define PID_KP_HEIGHT 2.0f
+#define PID_KI_HEIGHT 0.03f
+#define PID_KD_HEIGHT 0.3f
 
 // ── Regelkreis ─────────────────────────────────────────────
 #define PID_INTERVAL_MS 50      // 20 Hz Regelfrequenz

@@ -13,7 +13,7 @@
 MotorMixer motors;
 Barometer baro;
 KeyboardInput keyboard;
-PIDController pid(PID_KP_DEFAULT, PID_KI_DEFAULT, PID_KD_DEFAULT);
+PIDController pidHeight(PID_KP_HEIGHT, PID_KI_HEIGHT, PID_KD_HEIGHT);
 BluetoothConfig btConfig;
 Settings settings;
 IMU imu;
@@ -71,7 +71,7 @@ void disarm()
     armed = false;
     targetHeightCm = 0.0f;
     motors.stop();
-    pid.reset();
+    pidHeight.reset();
     LOG("[CTRL] DISARM — Motoren gestoppt");
 }
 
@@ -113,19 +113,6 @@ void setup()
     LOG(">> Modus: IMU TEST");
 
     delay(1000);
-    // Wire.setSDA(PIN_SDA);
-    // Wire.setSCL(PIN_SCL);
-    // Wire.begin();
-    // Wire.setClock(400000);
-    // delay(500);
-
-    // WHO_AM_I direkt lesen — vor imu.begin()
-    // Wire.beginTransmission(0x68);
-    // Wire.write(0x75);
-    // Wire.endTransmission(false);
-    // Wire.requestFrom(0x68, 1);
-    // uint8_t whoami = Wire.read();
-    // LOG_FMT("[IMU] WHO_AM_I: 0x%02X", whoami);
 
     if (!imu.begin(true))  // ← true = Wire initialisieren
     {
@@ -181,16 +168,16 @@ void setup()
     }
 
     motors.begin();
-    pid.begin();
+    pidHeight.begin();
     keyboard.begin();
 
     settings.begin();
     float kp, ki, kd;
     if (settings.load(kp, ki, kd))
     {
-        pid.setKp(kp);
-        pid.setKi(ki);
-        pid.setKd(kd);
+        pidHeight.setKp(kp);
+        pidHeight.setKi(ki);
+        pidHeight.setKd(kd);
     }
 
     // IMU immer starten — unabhaengig von EEPROM
@@ -309,7 +296,7 @@ void loop()
 
     baro.update();
     imu.update();
-    btConfig.update(pid, settings);
+    btConfig.update(pidHeight, settings);
 
     KeyEvent key = keyboard.getKey();
     switch (key)
@@ -332,7 +319,7 @@ void loop()
             delay(500);
             armed = true;
             targetHeightCm = 20.0f;
-            pid.reset();
+            pidHeight.reset();
             LOG("[CTRL] ARM — Ziel: 20 cm");
         }
         break;
@@ -343,7 +330,7 @@ void loop()
 
     case KeyEvent::KEY_R:
         baro.calibrate();
-        pid.reset();
+        pidHeight.reset();
         break;
 
     case KeyEvent::KEY_H:
@@ -359,7 +346,7 @@ void loop()
     {
         lastPidMs = millis();
         float currentHeight = baro.getAltitudeCm();
-        float throttle = pid.compute(targetHeightCm, currentHeight);
+        float throttle = pidHeight.compute(targetHeightCm, currentHeight);
         motors.setThrottle((uint16_t)throttle);
     }
 
@@ -370,7 +357,7 @@ void loop()
         LOG_FMT("[CTRL] Ziel: %.1f cm | Ist: %.1f cm | Throttle: %.0f us | Armed: %s",
                 targetHeightCm,
                 baro.getAltitudeCm(),
-                pid.getLastThrottle(),
+                pidHeight.getLastThrottle(),
                 armed ? "JA" : "NEIN");
     }
 
