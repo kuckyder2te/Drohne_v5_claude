@@ -53,3 +53,27 @@ void MotorMixer::stop() {
     setThrottle(ESC_MIN_US);
     LOG("[MOTOR] STOP");
 }
+
+void MotorMixer::mix(uint16_t throttle, float roll, float pitch, float yaw) {
+    // X-Konfiguration:
+    //      Vorne
+    //  FL(CW)  FR(CCW)
+    //  BL(CCW) BR(CW)
+    //
+    // Roll  positiv = rechts kippen → FL/BL mehr, FR/BR weniger
+    // Pitch positiv = vorwaerts kippen → BL/BR mehr, FL/FR weniger
+
+    float t = (float)throttle;
+
+    _fl = (uint16_t)constrain(t - roll + pitch, ESC_MIN_US, ESC_MAX_US);
+    _fr = (uint16_t)constrain(t + roll + pitch, ESC_MIN_US, ESC_MAX_US);
+    _bl = (uint16_t)constrain(t - roll - pitch, ESC_MIN_US, ESC_MAX_US);
+    _br = (uint16_t)constrain(t + roll - pitch, ESC_MIN_US, ESC_MAX_US);
+
+    _writePWM(PIN_MOTOR_FL, _fl);
+    _writePWM(PIN_MOTOR_FR, _fr);
+    _writePWM(PIN_MOTOR_BL, _bl);
+    _writePWM(PIN_MOTOR_BR, _br);
+
+    LOG_FMT("[MOTOR] FL:%d FR:%d BL:%d BR:%d", _fl, _fr, _bl, _br);
+}

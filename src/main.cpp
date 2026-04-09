@@ -14,6 +14,9 @@ MotorMixer motors;
 Barometer baro;
 KeyboardInput keyboard;
 PIDController pidHeight(PID_KP_HEIGHT, PID_KI_HEIGHT, PID_KD_HEIGHT);
+PIDController pidRoll(PID_KP_ROLL, PID_KI_ROLL, PID_KD_ROLL);
+PIDController pidPitch(PID_KP_PITCH, PID_KI_PITCH, PID_KD_PITCH);
+
 BluetoothConfig btConfig;
 Settings settings;
 IMU imu;
@@ -72,6 +75,8 @@ void disarm()
     targetHeightCm = 0.0f;
     motors.stop();
     pidHeight.reset();
+    pidRoll.reset();
+    pidPitch.reset();
     LOG("[CTRL] DISARM — Motoren gestoppt");
 }
 
@@ -83,6 +88,10 @@ void setup()
 
     // BT zuerst starten — damit LOG() auf BT ausgeben kann
     btConfig.begin();
+
+    pidHeight.begin();
+    pidRoll.begin();
+    pidPitch.begin();
 
     // Jetzt erst LOG verwenden
     LOG("=== DROHNE PICO BOOT ====");
@@ -114,10 +123,11 @@ void setup()
 
     delay(1000);
 
-    if (!imu.begin(true))  // ← true = Wire initialisieren
+    if (!imu.begin(true)) // ← true = Wire initialisieren
     {
         LOG("FEHLER: IMU! Programm gestoppt.");
-        while (true) delay(1000);
+        while (true)
+            delay(1000);
     }
 #endif
 
@@ -215,7 +225,8 @@ void loop()
 #ifdef TEST_IMU
     imu.update();
     static uint32_t lastIMU = 0;
-    if (millis() - lastIMU >= 100) {
+    if (millis() - lastIMU >= 100)
+    {
         lastIMU = millis();
         LOG_FMT("[IMU] Roll: %.1f  Pitch: %.1f  AccZ: %.2f  ready:%d",
                 imu.getRoll(), imu.getPitch(), imu.getAccZ(), imu.isReady());
@@ -308,7 +319,7 @@ void loop()
 
     baro.update();
     imu.update();
-    btConfig.update(pidHeight, settings);
+    btConfig.update(pidHeight, pidRoll, pidPitch, settings);
 
     KeyEvent key = keyboard.getKey();
     switch (key)
@@ -357,9 +368,16 @@ void loop()
     if (armed && (millis() - lastPidMs >= PID_INTERVAL_MS))
     {
         lastPidMs = millis();
-        float currentHeight = baro.getAltitudeCm();
-        float throttle = pidHeight.compute(targetHeightCm, currentHeight);
-        motors.setThrottle((uint16_t)throttle);
+
+        // Hoehenregelung
+        float throttle = pidHeight.compute(targetHeightCm, baro.getAltitudeCm());
+
+        // Lageregelung
+        float rollCorr = pidRoll.compute(TARGET_ROLL_DEG, imu.getRoll());
+        float pitchCorr = pidPitch.compute(TARGET_PITCH_DEG, imu.getPitch());
+
+        // Alles kombinieren
+        motors.mix((uint16_t)throttle, rollCorr, pitchCorr, 0.0f);
     }
 
     // Statusausgabe alle 500ms

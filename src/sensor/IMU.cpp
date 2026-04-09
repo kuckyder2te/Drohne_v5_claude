@@ -117,17 +117,46 @@ bool IMU::update() {
     uint8_t err = Wire.endTransmission(false);
 
     // Bus-Fehler → Recovery
+ // Bus-Fehler → Recovery
+if (err != 0) {
+    LOG_FMT("[IMU] Bus Fehler: %d — Recovery", err);
+
+    // Wire komplett beenden
+    Wire.end();
+    delay(20);
+
+    // Manuelle Clock-Pulse — befreit haengenden Bus
+    pinMode(PIN_SDA, OUTPUT);
+    pinMode(PIN_SCL, OUTPUT);
+    digitalWrite(PIN_SDA, HIGH);
+    for (int i = 0; i < 9; i++) {
+        digitalWrite(PIN_SCL, HIGH); delayMicroseconds(10);
+        digitalWrite(PIN_SCL, LOW);  delayMicroseconds(10);
+    }
+    // STOP Condition
+    digitalWrite(PIN_SDA, LOW);  delayMicroseconds(10);
+    digitalWrite(PIN_SCL, HIGH); delayMicroseconds(10);
+    digitalWrite(PIN_SDA, HIGH); delayMicroseconds(10);
+
+    delay(20);
+
+    // Wire neu starten
+    Wire.setSDA(PIN_SDA);
+    Wire.setSCL(PIN_SCL);
+    Wire.begin();
+    Wire.setClock(100000);
+    delay(50);
+
+    // Nochmal versuchen
+    Wire.beginTransmission((uint8_t)0x68);
+    Wire.write((uint8_t)0x3B);
+    err = Wire.endTransmission(false);
     if (err != 0) {
-        LOG_FMT("[IMU] Bus Fehler: %d — Recovery", err);
-        // Bus Recovery
-        Wire.end();
-        delay(10);
-        Wire.setSDA(PIN_SDA);
-        Wire.setSCL(PIN_SCL);
-        Wire.begin();
-        Wire.setClock(100000);
+        LOG("[IMU] Recovery fehlgeschlagen!");
         return false;
     }
+    LOG("[IMU] Recovery erfolgreich");
+}
 
     Wire.requestFrom((uint8_t)0x68, (uint8_t)14);
 

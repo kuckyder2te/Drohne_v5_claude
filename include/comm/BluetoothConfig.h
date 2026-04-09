@@ -5,13 +5,21 @@
 #include "storage/Settings.h"
 #include "pins.h"
 
-class BluetoothConfig {
+class BluetoothConfig
+{
 public:
     void begin();
-    void update(PIDController& pid, Settings& settings);
+    void update(PIDController &pidHeight,
+                PIDController &pidRoll,
+                PIDController &pidPitch,
+                Settings &settings);
 
 private:
     String _buffer = "";
-    void _processCommand(const String& cmd, PIDController& pid, Settings& settings);
-    void _printValues(PIDController& pid);
+    void _processCommand(const String &cmd,
+                         PIDController &pidHeight,
+                         PIDController &pidRoll,
+                         PIDController &pidPitch,
+                         Settings &settings);
+    void _printValues(PIDController &pid);
 };
