@@ -7,13 +7,13 @@ PIDController::PIDController(float kp, float ki, float kd)
 
 float PIDController::_clampCoeff(float val, const char* name) {
     if (val < PID_COEFF_MIN) {
-        Serial.print("[PID] WARNUNG: "); Serial.print(name);
-        Serial.print(" zu klein → auf "); Serial.println(PID_COEFF_MIN, 4);
+        LOG_FMT("[PID] WARNUNG: %s", name); //Serial.print(name);
+        LOG_FMT(" zu klein → auf %.4f", PID_COEFF_MIN); //Serial.println(PID_COEFF_MIN, 4);
         return PID_COEFF_MIN;
     }
     if (val > PID_COEFF_MAX) {
-        Serial.print("[PID] WARNUNG: "); Serial.print(name);
-        Serial.print(" zu groß → auf "); Serial.println(PID_COEFF_MAX, 2);
+        LOG_FMT("[PID] WARNUNG: %s", name);
+        LOG_FMT(" zu groß → auf %.4f", PID_COEFF_MAX);
         return PID_COEFF_MAX;
     }
     return val;
@@ -24,10 +24,10 @@ void PIDController::begin() {
     _ki = _clampCoeff(_ki, "Ki");
     _kd = _clampCoeff(_kd, "Kd");
     reset();
-    Serial.println("[PID] Regler initialisiert (eigene Implementierung)");
-    Serial.print("[PID] Kp="); Serial.print(_kp, 4);
-    Serial.print(" Ki=");      Serial.print(_ki, 4);
-    Serial.print(" Kd=");      Serial.println(_kd, 4);
+    LOG("[PID] Regler initialisiert (eigene Implementierung)");
+    LOG_FMT("[PID] Kp=%.4f", _kp);    
+    LOG_FMT("[PID] Ki=%.4f", _ki);
+    LOG_FMT("[PID] Kd=%.4f", _kd);      
 }
 
 float PIDController::compute(float setpoint, float measured) {
@@ -64,20 +64,20 @@ void PIDController::reset() {
     _integral  = 0.0f;
     _lastError = 0.0f;
     _lastTime  = millis() / 1000.0f;
-    Serial.println("[PID] Reset");
+    LOG("[PID] Reset");
 }
 
 void PIDController::setKp(float kp) {
     _kp = _clampCoeff(kp, "Kp");
-    Serial.print("[PID] Kp="); Serial.println(_kp, 4);
+    LOG_FMT("[PID] Kp=%.4", _kp); 
 }
 
 void PIDController::setKi(float ki) {
     _ki = _clampCoeff(ki, "Ki");
-    Serial.print("[PID] Ki="); Serial.println(_ki, 4);
+    LOG_FMT("[PID] Ki=%.4f", _ki); 
 }
 
 void PIDController::setKd(float kd) {
     _kd = _clampCoeff(kd, "Kd");
-    Serial.print("[PID] Kd="); Serial.println(_kd, 4);
+    LOG_FMT("[PID] Kd=%.4f", _kd); 
 }
