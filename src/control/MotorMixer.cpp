@@ -34,7 +34,7 @@ void MotorMixer::begin() {
     // Alle ESCs mit Minimalthrottle initialisieren
     stop();
     delay(2000);  // ESCs kalibrieren lassen
-    Serial.println("[MOTOR] ESC Initialisierung abgeschlossen");
+    LOG("[MOTOR] ESC Initialisierung abgeschlossen");
 }
 
 void MotorMixer::setThrottle(uint16_t throttle_us) {
@@ -46,12 +46,10 @@ void MotorMixer::setThrottle(uint16_t throttle_us) {
     _writePWM(PIN_MOTOR_BL, _throttle_us);
     _writePWM(PIN_MOTOR_BR, _throttle_us);
 
-    Serial.print("[MOTOR] Throttle: ");
-    Serial.print(_throttle_us);
-    Serial.println(" µs");
+    LOG_FMT("[MOTOR] Throttle: %i µs", _throttle_us);
 }
-
+    
 void MotorMixer::stop() {
     setThrottle(ESC_MIN_US);
-    Serial.println("[MOTOR] STOP");
+    LOG("[MOTOR] STOP");
 }
