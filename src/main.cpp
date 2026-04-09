@@ -85,7 +85,7 @@ void setup()
     btConfig.begin();
 
     // Jetzt erst LOG verwenden
-    LOG("=== DROHNE PICO BOOT ===");
+    LOG("=== DROHNE PICO BOOT ====");
 
 #ifdef TEST_I2C_SCAN
     Wire.setSDA(PIN_SDA);
