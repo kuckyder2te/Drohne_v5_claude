@@ -24,39 +24,32 @@ uint8_t IMU::_readReg(uint8_t reg) {
 
 // ── Initialisierung ───────────────────────────────────────
 
-    bool IMU::begin(bool initWire) {    // ← ERSTE Zeile der Funktion
-    // I2C Bus Recovery — befreit hängenden Bus nach Reset
-    
-    pinMode(PIN_SDA, OUTPUT);
-    pinMode(PIN_SCL, OUTPUT);
-    digitalWrite(PIN_SDA, HIGH);
-    for (int i = 0; i < 9; i++) {
-        digitalWrite(PIN_SCL, HIGH);
-        delayMicroseconds(5);
-        digitalWrite(PIN_SCL, LOW);
-        delayMicroseconds(5);
-    }
-    // STOP Condition
-    digitalWrite(PIN_SDA, LOW);
-    delayMicroseconds(5);
-    digitalWrite(PIN_SCL, HIGH);
-    delayMicroseconds(5);
-    digitalWrite(PIN_SDA, HIGH);
-    delayMicroseconds(5);
-
-    // Wire initialisieren
+    bool IMU::begin(bool initWire) {
     if (initWire) {
+        // Nur im TEST_IMU Modus: Bus-Recovery + Wire initialisieren
+        pinMode(PIN_SDA, OUTPUT);
+        pinMode(PIN_SCL, OUTPUT);
+        digitalWrite(PIN_SDA, HIGH);
+        for (int i = 0; i < 9; i++) {
+            digitalWrite(PIN_SCL, HIGH); delayMicroseconds(5);
+            digitalWrite(PIN_SCL, LOW);  delayMicroseconds(5);
+        }
+        digitalWrite(PIN_SDA, LOW);  delayMicroseconds(5);
+        digitalWrite(PIN_SCL, HIGH); delayMicroseconds(5);
+        digitalWrite(PIN_SDA, HIGH); delayMicroseconds(5);
+
         Wire.setSDA(PIN_SDA);
         Wire.setSCL(PIN_SCL);
         Wire.begin();
         Wire.setClock(100000);
+        delay(100);
     }
-    delay(100);
+    // Normalbetrieb: Wire bereits vom Barometer initialisiert — direkt weiter
 
     // Software Reset
-    _writeReg(0x6B, 0x80);  // PWR_MGMT_1: DEVICE_RESET
+    _writeReg(0x6B, 0x80);
     delay(100);
-    _writeReg(0x6B, 0x00);  // PWR_MGMT_1: Wake up
+    _writeReg(0x6B, 0x00);
     delay(100);
 
     // WHO_AM_I prüfen
@@ -67,12 +60,9 @@ uint8_t IMU::_readReg(uint8_t reg) {
         return false;
     }
 
-    // DLPF auf 20Hz — filtert Vibrationen der Motoren
-    _writeReg(0x1A, 0x04);  // CONFIG: DLPF_CFG = 4 (20Hz)
-    // Gyro ±2000°/s
-    _writeReg(0x1B, 0x18);  // GYRO_CONFIG
-    // Accel ±16g
-    _writeReg(0x1C, 0x18);  // ACCEL_CONFIG
+    _writeReg(0x1A, 0x04);
+    _writeReg(0x1B, 0x18);
+    _writeReg(0x1C, 0x18);
 
     _ready = true;
     LOG("[IMU] MPU9250 bereit");

@@ -191,7 +191,7 @@ void setup()
     }
 
     // IMU immer starten — unabhaengig von EEPROM
-    if (!imu.begin())
+    if (!imu.begin(false))
     {
         LOG("WARNUNG: IMU nicht gefunden!");
     }
@@ -208,20 +208,7 @@ void setup()
 // ── Loop ───────────────────────────────────────────────────
 void loop()
 {
-
     // ── TEST_IMU ──────────────────────────────────────────
-    /*
-#ifdef TEST_IMU
-    imu.update();
-    static uint32_t lastIMU = 0;
-    if (millis() - lastIMU >= 100) {
-        lastIMU = millis();
-        LOG_FMT("[IMU] Roll: %.1f  Pitch: %.1f  AccZ: %.2f",
-                imu.getRoll(), imu.getPitch(), imu.getAccZ());
-    }
-#endif
-*/
-
 #ifdef TEST_IMU
     imu.update();
     static uint32_t lastIMU = 0;
@@ -319,9 +306,12 @@ void loop()
 
     baro.update();
     imu.update();
+
+    // Tastatureingabe ZUERST
+    KeyEvent key = keyboard.getKey();
+    // Dann BT PID-Konfiguration
     btConfig.update(pidHeight, pidRoll, pidPitch, settings);
 
-    KeyEvent key = keyboard.getKey();
     switch (key)
     {
     case KeyEvent::ARROW_UP:

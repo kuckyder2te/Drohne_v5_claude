@@ -1,45 +1,130 @@
 #include "comm/KeyboardInput.h"
 #include "myLogger.h"
 
-void KeyboardInput::begin() {
+void KeyboardInput::begin()
+{
     // Serial bereits in main.cpp gestartet
     LOG("[KEY] Tastatur bereit");
     LOG("[KEY] Pfeiltasten: hoch/runter | s=Stop | r=Rekalibrierung | h=Hilfe");
 }
 
-KeyEvent KeyboardInput::getKey() {
-    while (Serial.available()) {
+KeyEvent KeyboardInput::getKey()
+{
+    while (Serial.available())
+    {
         uint8_t c = Serial.read();
 
-        switch (_escState) {
-            case 0:  // Normaler Zustand
-                if (c == 0x1B) {
-                    _escState = 1;  // ESC empfangen
-                } else {
-        switch (c) {
-            case 'a': case 'A': return KeyEvent::KEY_A;  // ← neu
-            case 's': case 'S': return KeyEvent::KEY_S;
-            case 'h': case 'H': return KeyEvent::KEY_H;
-            case 'r': case 'R': return KeyEvent::KEY_R;
+        switch (_escState)
+        {
+        case 0: // Normaler Zustand
+            if (c == 0x1B)
+            {
+                _escState = 1; // ESC empfangen
+            }
+            else
+            {
+                switch (c)
+                {
+                case 'a':
+                case 'A':
+                    return KeyEvent::KEY_A;
+                case 's':
+                case 'S':
+                    return KeyEvent::KEY_S;
+                case 'h':
+                case 'H':
+                    return KeyEvent::KEY_H;
+                case 'r':
+                case 'R':
+                    return KeyEvent::KEY_R;
+                case '+':
+                    return KeyEvent::ARROW_UP; // ← neu
+                case '-':
+                    return KeyEvent::ARROW_DOWN; // ← neu
+                }
+            }
+            break;
+
+        case 1: // ESC empfangen, warte auf [
+            if (c == 0x5B)
+            {
+                _escState = 2;
+            }
+            else
+            {
+                _escState = 0; // Kein gültiges Escape — reset
+            }
+            break;
+
+        case 2:            // ESC [ empfangen, warte auf Pfeil
+            _escState = 0; // Reset für nächste Sequenz
+            switch (c)
+            {
+            case 0x41:
+                return KeyEvent::ARROW_UP;
+            case 0x42:
+                return KeyEvent::ARROW_DOWN;
+            }
+            break;
         }
     }
-    break;
 
-            case 1:  // ESC empfangen, warte auf [
-                if (c == 0x5B) {
-                    _escState = 2;
-                } else {
-                    _escState = 0;  // Kein gültiges Escape — reset
-                }
-                break;
+    while (BT_UART.available())
+    {
+        uint8_t c = BT_UART.read();
 
-            case 2:  // ESC [ empfangen, warte auf Pfeil
-                _escState = 0;  // Reset für nächste Sequenz
-                switch (c) {
-                    case 0x41: return KeyEvent::ARROW_UP;
-                    case 0x42: return KeyEvent::ARROW_DOWN;
+        switch (_escState)
+        {
+        case 0: // Normaler Zustand
+            if (c == 0x1B)
+            {
+                _escState = 1; // ESC empfangen
+            }
+            else
+            {
+                switch (c)
+                {
+                case 'a':
+                case 'A':
+                    return KeyEvent::KEY_A;
+                case 's':
+                case 'S':
+                    return KeyEvent::KEY_S;
+                case 'h':
+                case 'H':
+                    return KeyEvent::KEY_H;
+                case 'r':
+                case 'R':
+                    return KeyEvent::KEY_R;
+                case '+':
+                    return KeyEvent::ARROW_UP; // ← neu
+                case '-':
+                    return KeyEvent::ARROW_DOWN; // ← neu
                 }
-                break;
+            }
+            break;
+
+        case 1: // ESC empfangen, warte auf [
+            if (c == 0x5B)
+            {
+                _escState = 2;
+            }
+            else
+            {
+                _escState = 0; // Kein gültiges Escape — reset
+            }
+            break;
+
+        case 2:            // ESC [ empfangen, warte auf Pfeil
+            _escState = 0; // Reset für nächste Sequenz
+            switch (c)
+            {
+            case 0x41:
+                return KeyEvent::ARROW_UP;
+            case 0x42:
+                return KeyEvent::ARROW_DOWN;
+            }
+            break;
         }
     }
     return KeyEvent::NONE;

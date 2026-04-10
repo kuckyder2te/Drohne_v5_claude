@@ -12,30 +12,64 @@ void BluetoothConfig::begin()
     LOG("[BT] Bluetooth bereit");
 }
 
-void BluetoothConfig::update(PIDController& pidHeight,
-                              PIDController& pidRoll,
-                              PIDController& pidPitch,
-                              Settings& settings) {
-    while (BT_UART.available()) {
+void BluetoothConfig::update(PIDController &pidHeight,
+                             PIDController &pidRoll,
+                             PIDController &pidPitch,
+                             Settings &settings)
+{
+    while (BT_UART.available())
+    {
         char c = BT_UART.read();
-        if (c == '\n' || c == '\r') {
-            if (_buffer.length() > 0) {
+        if (c == '\n' || c == '\r')
+        {
+            if (_buffer.length() > 0)
+            {
                 _processCommand(_buffer, pidHeight, pidRoll, pidPitch, settings);
                 _buffer = "";
             }
-        } else {
+        }
+        else
+        {
             _buffer += c;
-            if (_buffer.length() > 20) _buffer = "";
+            if (_buffer.length() > 20)
+                _buffer = "";
         }
     }
 }
 
-void _processCommand(const String &cmd,
-                         PIDController &pidHeight,
-                         PIDController &pidRoll,
-                         PIDController &pidPitch,
-                         Settings &settings)
+void BluetoothConfig::_processCommand(const String &cmd,
+                                      PIDController &pidHeight,
+                                      PIDController &pidRoll,
+                                      PIDController &pidPitch,
+                                      Settings &settings)
 {
+
+    // ← NEUER BLOCK HIER EINFÜGEN — vor dem "?" Check:
+    if (cmd.length() == 1)
+    {
+        char c = toupper(cmd[0]);
+        switch (c)
+        {
+        case 'A':
+            _pendingKey = KeyEvent::KEY_A;
+            return;
+        case 'S':
+            _pendingKey = KeyEvent::KEY_S;
+            return;
+        case 'R':
+            _pendingKey = KeyEvent::KEY_R;
+            return;
+        case 'H':
+            _pendingKey = KeyEvent::KEY_H;
+            return;
+        case '+':
+            _pendingKey = KeyEvent::ARROW_UP;
+            return;
+        case '-':
+            _pendingKey = KeyEvent::ARROW_DOWN;
+            return;
+        }
+    }
 
     if (cmd == "?")
     {
