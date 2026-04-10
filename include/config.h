@@ -38,10 +38,10 @@
 #define PID_KD_HEIGHT       0.3f
 
 // ── PID Roll/Pitch ─────────────────────────────────────────
-#define PID_KP_ROLL         0.0f   // klein anfangen!
+#define PID_KP_ROLL         0.5f   // klein anfangen!
 #define PID_KI_ROLL         0.0f
 #define PID_KD_ROLL         0.0f
-#define PID_KP_PITCH        0.0f
+#define PID_KP_PITCH        0.5f
 #define PID_KI_PITCH        0.0f
 #define PID_KD_PITCH        0.0f
 
