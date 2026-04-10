@@ -13,9 +13,9 @@
 MotorMixer motors;
 Barometer baro;
 KeyboardInput keyboard;
-PIDController pidHeight(PID_KP_HEIGHT, PID_KI_HEIGHT, PID_KD_HEIGHT);
-PIDController pidRoll(PID_KP_ROLL, PID_KI_ROLL, PID_KD_ROLL);
-PIDController pidPitch(PID_KP_PITCH, PID_KI_PITCH, PID_KD_PITCH);
+PIDController pidHeight(PID_KP_HEIGHT, PID_KI_HEIGHT, PID_KD_HEIGHT, true); // mit Offset
+PIDController pidRoll(PID_KP_ROLL, PID_KI_ROLL, PID_KD_ROLL, false);        // ohne Offset
+PIDController pidPitch(PID_KP_PITCH, PID_KI_PITCH, PID_KD_PITCH, false);    // ohne Offset
 
 BluetoothConfig btConfig;
 Settings settings;
@@ -75,8 +75,8 @@ void disarm()
     targetHeightCm = 0.0f;
     motors.stop();
     pidHeight.reset();
-    pidRoll.reset();
-    pidPitch.reset();
+    pidRoll.reset();  // ← NEU
+    pidPitch.reset(); // ← NEU
     LOG("[CTRL] DISARM — Motoren gestoppt");
 }
 
@@ -333,6 +333,8 @@ void loop()
             armed = true;
             targetHeightCm = 20.0f;
             pidHeight.reset();
+            pidRoll.reset();  // ← NEU
+            pidPitch.reset(); // ← NEU
             LOG("[CTRL] ARM — Ziel: 20 cm");
         }
         break;

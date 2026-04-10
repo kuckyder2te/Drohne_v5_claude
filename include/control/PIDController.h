@@ -9,7 +9,8 @@
 
 class PIDController {
 public:
-    PIDController(float kp = 1.0f, float ki = 0.05f, float kd = 0.1f);
+ //   PIDController(float kp = 1.0f, float ki = 0.05f, float kd = 0.1f);
+    PIDController(float kp, float ki, float kd, bool useOffset = true);
 
     void  begin();
     float compute(float setpoint, float measured);
@@ -35,6 +36,7 @@ private:
     // Anti-Windup: Integral begrenzen
     float _integralMin = -500.0f;
     float _integralMax =  500.0f;
+    bool  _useOffset   = true;   // ← NEU
 
     float _clampCoeff(float val, const char* name);
 };
