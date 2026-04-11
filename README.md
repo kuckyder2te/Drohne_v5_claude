@@ -411,9 +411,6 @@ Download: https://datasheets.raspberrypi.com/soft/flash_nuke.uf2
 
 ## Test- und Prüfergebnisse
 
-
-## Test- und Prüfergebnisse
-
 | Arm Color | Motor nut | Position | PIN | Direction |
 |---|---|---|---|---|
 | red |black | FL | 11 | CW |
@@ -429,3 +426,6 @@ HC6 Name HC-06 PIN 1234
 3. Windows Long Path aktivieren — wichtig für den Earle Philhower Core!
 Im Terminal als Administrator:
 reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f
+
+## Links
+Pico: https://datacapturecontrol.com/articles/io-devices/microcontrollers/rpi-pico

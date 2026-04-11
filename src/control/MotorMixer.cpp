@@ -77,13 +77,9 @@ void MotorMixer::mix(uint16_t throttle, float roll, float pitch, float yaw)
     _bl = (uint16_t)constrain(t - roll - pitch, ESC_MIN_US, ESC_MAX_US);
     _br = (uint16_t)constrain(t + roll - pitch, ESC_MIN_US, ESC_MAX_US);
 
-    // Debug — was geht raus?
-    LOG_FMT("[MIX] FL:%d FR:%d BL:%d BR:%d", _fl, _fr, _bl, _br);
-
     _writePWM(PIN_MOTOR_FL, _fl);
     _writePWM(PIN_MOTOR_FR, _fr);
     _writePWM(PIN_MOTOR_BL, _bl);
     _writePWM(PIN_MOTOR_BR, _br);
 
-    LOG_FMT("[MOTOR] FL:%d FR:%d BL:%d BR:%d", _fl, _fr, _bl, _br);
 }
