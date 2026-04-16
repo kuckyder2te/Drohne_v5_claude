@@ -21,6 +21,7 @@
 #define PIN_NRF_SCK 18
 #define PIN_NRF_CSN 17
 #define PIN_NRF_CE 20
+#define PIN_NRF_INT 3
 
 // ── Sonstige Pins ────────────────────────────────
 
