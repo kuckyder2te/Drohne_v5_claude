@@ -8,22 +8,21 @@
 
 // I²C Pins
 #define PIN_SDA 4
-#define PIN_SCL 5
-
-// Radio
-#define PIN_RADIO_CE 20
-#define PIN_RADIO_CSN 17
+#define PIN_SCL 5 
+#define PIN_IMU_INT 21       
 
 // Bluetooth HC-06 (UART0)
 #define PIN_BT_TX 0
 #define PIN_BT_RX 1
 
-// ── SPI (MPU9250 + NRF24) ─────────────────────────────────
-#define PIN_SPI_MOSI 19 // ⚠️ noch nicht in pins.h — bitte prüfen!
-#define PIN_SPI_MISO 16 // ⚠️ noch nicht in pins.h — bitte prüfen!
-#define PIN_SPI_SCK 18  // ⚠️ noch nicht in pins.h — bitte prüfen!
-#define PIN_IMU_CS 9    // ⚠️ noch nicht in pins.h — bitte prüfen!
+// ── SPI (NRF24) ─────────────────────────────────
+#define PIN_NRF_MOSI 19 
+#define PIN_NRF_MISO 16
+#define PIN_NRF_SCK 18
 #define PIN_NRF_CSN 17
+#define PIN_NRF_CE 20
+
+// ── Sonstige Pins ────────────────────────────────
 
 #define BUZZER 10
 #define BATTERY 26

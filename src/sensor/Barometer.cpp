@@ -12,7 +12,7 @@ bool Barometer::begin() {
         return false;
     }
 
-    _ms5611.setOversampling(OSR_HIGH);
+    _ms5611.setOversampling(OSR_LOW);
     LOG("[BARO] MS5611 gefunden");
 
     LOG("[BARO] Aufwaermzeit 90s...");

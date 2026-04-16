@@ -344,9 +344,13 @@ void loop()
         break;
 
     case KeyEvent::KEY_R:
+    if (!armed) {          // ← nur wenn NICHT armed!
         baro.calibrate();
         pidHeight.reset();
-        break;
+    } else {
+        LOG("[CTRL] Rekalibrierung nur im DISARM Modus!");
+    }
+    break;
 
     case KeyEvent::KEY_H:
         printHelp();
