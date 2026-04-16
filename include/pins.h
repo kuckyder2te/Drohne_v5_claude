@@ -9,7 +9,7 @@
 // I²C Pins
 #define PIN_SDA 4
 #define PIN_SCL 5 
-#define PIN_IMU_INT 21       
+#define PIN_IMU_INT 21     
 
 // Bluetooth HC-06 (UART0)
 #define PIN_BT_TX 0
