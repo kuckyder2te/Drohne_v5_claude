@@ -3,3 +3,9 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+doc/Thumbs.db
+doc/putty.log
+doc/ollama.txt
+doc/IMU_Test_Position.jpg
+doc/IMU_test_1.txt
+Thumbs.db
