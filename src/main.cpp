@@ -307,10 +307,31 @@ void loop()
     baro.update();
     imu.update();
 
-    // Tastatureingabe ZUERST
-    KeyEvent key = keyboard.getKey();
     // Dann BT PID-Konfiguration
     btConfig.update(pidHeight, pidRoll, pidPitch, settings);
+
+    // Bei IMU Fehler oder Höhensprung → sofort DISARM
+    if (armed)
+    {
+        // IMU Fehler → sofort disarmen
+        if (!imu.isReady())
+        {
+            LOG("[SAFETY] IMU Fehler — DISARM!");
+            disarm();
+        }
+        // Hoehensprung → disarmen
+        static float lastHeight = 0;
+        float h = baro.getAltitudeCm();
+        if (abs(h - lastHeight) > 500.0f)
+        { // ← nur bei extremen Sprüngen
+            LOG("[SAFETY] Hoehensprung — DISARM!");
+            disarm();
+        }
+        lastHeight = h;
+    }
+
+    // Tastatureingabe ZUERST
+    KeyEvent key = keyboard.getKey();
 
     switch (key)
     {
@@ -344,13 +365,16 @@ void loop()
         break;
 
     case KeyEvent::KEY_R:
-    if (!armed) {          // ← nur wenn NICHT armed!
-        baro.calibrate();
-        pidHeight.reset();
-    } else {
-        LOG("[CTRL] Rekalibrierung nur im DISARM Modus!");
-    }
-    break;
+        if (!armed)
+        { // ← nur wenn NICHT armed!
+            baro.calibrate();
+            pidHeight.reset();
+        }
+        else
+        {
+            LOG("[CTRL] Rekalibrierung nur im DISARM Modus!");
+        }
+        break;
 
     case KeyEvent::KEY_H:
         printHelp();
