@@ -9,3 +9,21 @@ doc/ollama.txt
 doc/IMU_Test_Position.jpg
 doc/IMU_test_1.txt
 Thumbs.db
+doc/ohne_haube.log
+doc/mit Haube.log
+doc/AussenTest_mit_1mm_Loch.log
+doc/AussenTest_1mm_kein Loch.log
+doc/Air_hut.jpg
+doc/20260419_113217.jpg
+doc/2mm_loch.log
+doc/1mm_loch.log
+doc/1mm_Loch_und_Klebeband.log
+doc/putty_1.log
+.gitignore
+doc/putty_Aussen_TemperaturKompensation_1.log
+doc/putty_Aussen_TemperaturKompensation_2.log
+doc/putty_Aussentest.log
+doc/putty_Option_A.log
+doc/putty_Option_B _0,6.log
+doc/putty_Option_B_0,4.log
+doc/putty_Option_B_0,5.log
