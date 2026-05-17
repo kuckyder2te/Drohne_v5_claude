@@ -420,6 +420,9 @@ Download: https://datasheets.raspberrypi.com/soft/flash_nuke.uf2
 
 HC6 Name HC-06 PIN 1234
 
+MS5607/MS5611  GY-63 0x77
+MPU9250 GY-91 0x68
+
 
 ## Änderungen für den Einsatz den PICO 2W
 

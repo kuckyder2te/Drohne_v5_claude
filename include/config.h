@@ -2,15 +2,19 @@
 
 // ── Debug Ausgabe ──────────────────────────────────────────
 #define _SERIAL_LOG       // ← USB Serial aktiv
-#define _BT_LOG         // ← Bluetooth Log aktiv
+#define _BT_LOG         // ← Bluetooth Log aktiv - Commented out for breadboard testing
                         // beide auskommentieren = kein Log
 
 // ── Test-Modi (auskommentieren = deaktiviert) ──────────────
 // #define TEST_MOTORS
-// #define TEST_BAROMETER
+ #define TEST_BAROMETER
 // #define TEST_KEYBOARD
 // #define TEST_I2C_SCAN
 // #define TEST_IMU 
+
+// Temperaturkompensation: Druckkorrektur pro °C Temperaturdifferenz
+// Empirisch ermittelt für MS5607 Sensor
+#define BARO_TEMP_COEFF 0.5f
 
 // ESC PWM-Parameter (Standard: 1000–2000 µs)
 #define ESC_MIN_US 1000

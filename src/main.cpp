@@ -87,7 +87,7 @@ void setup()
     delay(2000);
 
     // BT zuerst starten — damit LOG() auf BT ausgeben kann
-    btConfig.begin();
+    btConfig.begin(); // Commented out for breadboard testing
 
     pidHeight.begin();
     pidRoll.begin();
