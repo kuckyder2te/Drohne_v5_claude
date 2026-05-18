@@ -55,7 +55,7 @@ uint8_t IMU::_readReg(uint8_t reg) {
     // WHO_AM_I prüfen
     uint8_t whoami = _readReg(0x75);
     LOG_FMT("[IMU] WHO_AM_I: 0x%02X", whoami);
-    if (whoami != 0x71 && whoami != 0x73) {
+    if (whoami != 0x71 && whoami != 0x73 && whoami != 0x70) {
         LOG("[IMU] ERROR: Unbekannter Chip!");
         return false;
     }

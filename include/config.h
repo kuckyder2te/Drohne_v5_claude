@@ -7,7 +7,7 @@
 
 // ── Test-Modi (auskommentieren = deaktiviert) ──────────────
 // #define TEST_MOTORS
- #define TEST_BAROMETER
+// #define TEST_BAROMETER
 // #define TEST_KEYBOARD
 // #define TEST_I2C_SCAN
 // #define TEST_IMU 

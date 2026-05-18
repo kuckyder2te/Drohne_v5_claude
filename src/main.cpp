@@ -9,9 +9,11 @@
 #include "comm/BluetoothConfig.h"
 #include "storage/Settings.h"
 #include "sensor/IMU.h"
+#include "sensor/Battery.h"
 
 MotorMixer motors;
 Barometer baro;
+Battery battery;
 KeyboardInput keyboard;
 PIDController pidHeight(PID_KP_HEIGHT, PID_KI_HEIGHT, PID_KD_HEIGHT, true); // mit Offset
 PIDController pidRoll(PID_KP_ROLL, PID_KI_ROLL, PID_KD_ROLL, false);        // ohne Offset
@@ -85,6 +87,8 @@ void setup()
 {
     Serial.begin(115200);
     delay(2000);
+
+    battery.begin();
 
     // BT zuerst starten — damit LOG() auf BT ausgeben kann
     btConfig.begin(); // Commented out for breadboard testing
@@ -208,6 +212,8 @@ void setup()
 // ── Loop ───────────────────────────────────────────────────
 void loop()
 {
+battery.update();
+
     // ── TEST_IMU ──────────────────────────────────────────
 #ifdef TEST_IMU
     imu.update();
@@ -260,6 +266,7 @@ void loop()
                 baro.getPressure(),
                 baro.getTemperature());
     }
+    LOG_FMT("[BAT] Spannung: %.2fV", battery.getVoltage());  // ← hinzufügen
 #endif
 
     // ── TEST_KEYBOARD ──────────────────────────────────────
@@ -332,6 +339,12 @@ void loop()
 
     // Tastatureingabe ZUERST
     KeyEvent key = keyboard.getKey();
+
+    // BT String Befehle weiterleiten
+    String btCmd = keyboard.getBTCommand();
+    if (btCmd.length() > 0) {
+        btConfig.processCommand(btCmd, pidHeight, pidRoll, pidPitch, settings);
+    }
 
     switch (key)
     {
@@ -409,7 +422,10 @@ void loop()
                 baro.getAltitudeCm(),
                 pidHeight.getLastThrottle(),
                 armed ? "JA" : "NEIN");
+                battery.getVoltage();  // ← hier anhängen!
     }
+
+    
 
 #endif // TEST_I2C_SCAN
 #endif // TEST_IMU

@@ -11,14 +11,24 @@
 
 bool Barometer::begin()
 {
-    // 1. Wire initialisieren
-    Wire.setSDA(PIN_SDA);
-    Wire.setSCL(PIN_SCL);
-    Wire.begin();
-    delay(100);
+    // // 1. Wire initialisieren
+    // Wire.setSDA(PIN_SDA);
+    // Wire.setSCL(PIN_SCL);
+    // Wire.begin();
+    // delay(100);
 
     // 2. Variablen initialisieren
     _C0 = _C1 = _C2 = _C3 = _C4 = _C5 = _C6 = 0;
+
+    // Kurze Pause für I2C Stabilisierung
+    Wire.beginTransmission(MS5611_ADDR);
+    Wire.endTransmission();
+    delay(10);  // ← statt Debug Log
+
+    // Debug vor Reset
+    // Wire.beginTransmission(MS5611_ADDR);
+    // uint8_t err = Wire.endTransmission();
+    // LOG_FMT("[BARO] I2C Test vor Reset: %d", err);
 
     // 3. Reset senden
     if (!_reset())
@@ -36,7 +46,7 @@ bool Barometer::begin()
     LOG_FMT("[BARO] C1=%u C2=%u C3=%u C4=%u C5=%u C6=%u",
             _C1, _C2, _C3, _C4, _C5, _C6);
 
-    LOG("[BARO] MS5611 gefunden");
+    LOG("[BARO] MS5611(MS5607) gefunden");
 
     // 5. Aufwärmzeit
     LOG("[BARO] Aufwaermzeit 90s...");

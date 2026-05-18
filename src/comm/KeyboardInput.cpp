@@ -1,131 +1,86 @@
 #include "comm/KeyboardInput.h"
-#include "myLogger.h"
 
-void KeyboardInput::begin()
-{
-    // Serial bereits in main.cpp gestartet
-    LOG("[KEY] Tastatur bereit");
-    LOG("[KEY] Pfeiltasten: hoch/runter | s=Stop | r=Rekalibrierung | h=Hilfe");
+void KeyboardInput::begin() {
+    _escState  = 0;
+    _btBuffer  = "";
+    _btCommand = "";
 }
 
-KeyEvent KeyboardInput::getKey()
-{
-    while (Serial.available())
-    {
+KeyEvent KeyboardInput::getKey() {
+    _btCommand = "";  // Reset letzten BT Befehl
+
+    // ── USB Serial lesen ──────────────────────────────
+    while (Serial.available()) {
         uint8_t c = Serial.read();
-
-        switch (_escState)
-        {
-        case 0: // Normaler Zustand
-            if (c == 0x1B)
-            {
-                _escState = 1; // ESC empfangen
-            }
-            else
-            {
-                switch (c)
-                {
-                case 'a':
-                case 'A':
-                    return KeyEvent::KEY_A;
-                case 's':
-                case 'S':
-                    return KeyEvent::KEY_S;
-                case 'h':
-                case 'H':
-                    return KeyEvent::KEY_H;
-                case 'r':
-                case 'R':
-                    return KeyEvent::KEY_R;
-                case '+':
-                    return KeyEvent::ARROW_UP; // ← neu
-                case '-':
-                    return KeyEvent::ARROW_DOWN; // ← neu
-                }
-            }
-            break;
-
-        case 1: // ESC empfangen, warte auf [
-            if (c == 0x5B)
-            {
-                _escState = 2;
-            }
-            else
-            {
-                _escState = 0; // Kein gültiges Escape — reset
-            }
-            break;
-
-        case 2:            // ESC [ empfangen, warte auf Pfeil
-            _escState = 0; // Reset für nächste Sequenz
-            switch (c)
-            {
-            case 0x41:
-                return KeyEvent::ARROW_UP;
-            case 0x42:
-                return KeyEvent::ARROW_DOWN;
-            }
-            break;
-        }
+        KeyEvent ev = _parseChar(c, false);
+        if (ev != KeyEvent::NONE) return ev;
     }
 
-    while (BT_UART.available())
-    {
+    // ── BT Serial lesen ───────────────────────────────
+    while (BT_UART.available()) {
         uint8_t c = BT_UART.read();
 
-        switch (_escState)
-        {
-        case 0: // Normaler Zustand
-            if (c == 0x1B)
-            {
-                _escState = 1; // ESC empfangen
-            }
-            else
-            {
-                switch (c)
-                {
-                case 'a':
-                case 'A':
-                    return KeyEvent::KEY_A;
-                case 's':
-                case 'S':
-                    return KeyEvent::KEY_S;
-                case 'h':
-                case 'H':
-                    return KeyEvent::KEY_H;
-                case 'r':
-                case 'R':
-                    return KeyEvent::KEY_R;
-                case '+':
-                    return KeyEvent::ARROW_UP; // ← neu
-                case '-':
-                    return KeyEvent::ARROW_DOWN; // ← neu
+        // Zeilenende → Befehl fertig
+        if (c == '\n' || c == '\r') {
+            if (_btBuffer.length() > 0) {
+                // Einzelne Zeichen als KeyEvent
+                if (_btBuffer.length() == 1) {
+                    char ch = toupper(_btBuffer[0]);
+                    _btBuffer = "";
+                    switch (ch) {
+                        case 'A': return KeyEvent::KEY_A;
+                        case 'S': return KeyEvent::KEY_S;
+                        case 'H': return KeyEvent::KEY_H;
+                        case 'R': return KeyEvent::KEY_R;
+                        case '+': return KeyEvent::ARROW_UP;
+                        case '-': return KeyEvent::ARROW_DOWN;
+                    }
                 }
+                // Mehrzeichen → BT Befehl (P=x, I=x etc.)
+                _btCommand = _btBuffer;
+                _btBuffer  = "";
             }
-            break;
-
-        case 1: // ESC empfangen, warte auf [
-            if (c == 0x5B)
-            {
-                _escState = 2;
-            }
-            else
-            {
-                _escState = 0; // Kein gültiges Escape — reset
-            }
-            break;
-
-        case 2:            // ESC [ empfangen, warte auf Pfeil
-            _escState = 0; // Reset für nächste Sequenz
-            switch (c)
-            {
-            case 0x41:
-                return KeyEvent::ARROW_UP;
-            case 0x42:
-                return KeyEvent::ARROW_DOWN;
-            }
-            break;
+            return KeyEvent::NONE;
         }
+
+        // Puffer füllen
+        _btBuffer += (char)c;
+        if (_btBuffer.length() > 20) _btBuffer = "";
+    }
+
+    return KeyEvent::NONE;
+}
+
+String KeyboardInput::getBTCommand() {
+    return _btCommand;
+}
+
+KeyEvent KeyboardInput::_parseChar(uint8_t c, bool fromBT) {
+    switch (_escState) {
+    case 0:
+        if (c == 0x1B) {
+            _escState = 1;
+        } else {
+            switch (toupper(c)) {
+                case 'A': return KeyEvent::KEY_A;
+                case 'S': return KeyEvent::KEY_S;
+                case 'H': return KeyEvent::KEY_H;
+                case 'R': return KeyEvent::KEY_R;
+                case '+': return KeyEvent::ARROW_UP;
+                case '-': return KeyEvent::ARROW_DOWN;
+            }
+        }
+        break;
+    case 1:
+        _escState = (c == 0x5B) ? 2 : 0;
+        break;
+    case 2:
+        _escState = 0;
+        switch (c) {
+            case 0x41: return KeyEvent::ARROW_UP;
+            case 0x42: return KeyEvent::ARROW_DOWN;
+        }
+        break;
     }
     return KeyEvent::NONE;
 }

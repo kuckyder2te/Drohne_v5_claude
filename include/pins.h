@@ -26,4 +26,4 @@
 // ── Sonstige Pins ────────────────────────────────
 
 #define BUZZER 10
-#define BATTERY 26
+#define BATTERY 26  // ADC0
