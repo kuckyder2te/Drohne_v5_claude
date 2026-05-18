@@ -107,20 +107,6 @@ void setup()
     LOG("Wire OK, scanne...");
     i2cScan();
 #endif
-    /*
-    #ifdef TEST_IMU
-        LOG(">> Modus: IMU TEST");
-        Wire.setSDA(PIN_SDA);
-        Wire.setSCL(PIN_SCL);
-        Wire.begin();
-        Wire.setClock(400000);  // ← explizit 400kHz setzen
-        delay(500);              // ← war 100ms, jetzt 500ms
-        if (!imu.begin()) {
-            LOG("FEHLER: IMU! Programm gestoppt.");
-            while (true) delay(1000);
-        }
-    #endif
-    */
 
 #ifdef TEST_IMU
     LOG(">> Modus: IMU TEST");
@@ -212,7 +198,7 @@ void setup()
 // ── Loop ───────────────────────────────────────────────────
 void loop()
 {
-battery.update();
+    battery.update();
 
     // ── TEST_IMU ──────────────────────────────────────────
 #ifdef TEST_IMU
@@ -266,7 +252,7 @@ battery.update();
                 baro.getPressure(),
                 baro.getTemperature());
     }
-    LOG_FMT("[BAT] Spannung: %.2fV", battery.getVoltage());  // ← hinzufügen
+    LOG_FMT("[BAT] Spannung: %.2fV", battery.getVoltage()); // ← hinzufügen
 #endif
 
     // ── TEST_KEYBOARD ──────────────────────────────────────
@@ -342,7 +328,8 @@ battery.update();
 
     // BT String Befehle weiterleiten
     String btCmd = keyboard.getBTCommand();
-    if (btCmd.length() > 0) {
+    if (btCmd.length() > 0)
+    {
         btConfig.processCommand(btCmd, pidHeight, pidRoll, pidPitch, settings);
     }
 
@@ -417,15 +404,13 @@ battery.update();
     if (millis() - lastPrintMs >= 500)
     {
         lastPrintMs = millis();
-        LOG_FMT("[CTRL] Ziel: %.1f cm | Ist: %.1f cm | Throttle: %.0f us | Armed: %s",
+        LOG_FMT("[CTRL] Ziel: %.1f cm | Ist: %.1f cm | Throttle: %.0f us | Armed: %s | Bat: %.2fV",
                 targetHeightCm,
                 baro.getAltitudeCm(),
                 pidHeight.getLastThrottle(),
-                armed ? "JA" : "NEIN");
-                battery.getVoltage();  // ← hier anhängen!
+                armed ? "JA" : "NEIN",
+                battery.getVoltage()); // ← innerhalb LOG_FMT!
     }
-
-    
 
 #endif // TEST_I2C_SCAN
 #endif // TEST_IMU

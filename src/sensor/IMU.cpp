@@ -44,7 +44,6 @@ uint8_t IMU::_readReg(uint8_t reg) {
         Wire.setClock(100000);
         delay(100);
     }
-    // Normalbetrieb: Wire bereits vom Barometer initialisiert — direkt weiter
 
     // Software Reset
     _writeReg(0x6B, 0x80);

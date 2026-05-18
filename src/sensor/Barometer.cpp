@@ -11,46 +11,44 @@
 
 bool Barometer::begin()
 {
-    // // 1. Wire initialisieren
-    // Wire.setSDA(PIN_SDA);
-    // Wire.setSCL(PIN_SCL);
-    // Wire.begin();
-    // delay(100);
-
-    // 2. Variablen initialisieren
+    // 1. Variablen initialisieren
     _C0 = _C1 = _C2 = _C3 = _C4 = _C5 = _C6 = 0;
 
     // Kurze Pause für I2C Stabilisierung
     Wire.beginTransmission(MS5611_ADDR);
     Wire.endTransmission();
-    delay(10);  // ← statt Debug Log
+    delay(10); // ← statt Debug Log
 
     // Debug vor Reset
     // Wire.beginTransmission(MS5611_ADDR);
     // uint8_t err = Wire.endTransmission();
     // LOG_FMT("[BARO] I2C Test vor Reset: %d", err);
 
-    // 3. Reset senden
+    // 2. Reset senden
     if (!_reset())
     {
         LOG("[BARO] ERROR: Reset fehlgeschlagen!");
         return false;
     }
 
-    // 4. PROM lesen
+    // 3. PROM lesen
     if (!_readPROM())
     {
         LOG("[BARO] ERROR: PROM lesen fehlgeschlagen!");
         return false;
     }
+
+#ifdef TEST_BAROMETER
     LOG_FMT("[BARO] C1=%u C2=%u C3=%u C4=%u C5=%u C6=%u",
             _C1, _C2, _C3, _C4, _C5, _C6);
+
+#endif
 
     LOG("[BARO] MS5611(MS5607) gefunden");
 
     // 5. Aufwärmzeit
-    LOG("[BARO] Aufwaermzeit 90s...");
-    for (int i = 90; i > 0; i--)
+    LOG("[BARO] Aufwaermzeit 30s...");
+    for (int i = 30; i > 0; i--)
     {
         update();
         if (i % 10 == 0)
@@ -82,7 +80,6 @@ bool Barometer::begin()
 
     LOG("[BARO] Temperatur stabil!");
 
-    delay(30000);
     calibrate();
     return true;
 }
@@ -110,7 +107,10 @@ bool Barometer::_readPROM()
 
         Wire.requestFrom((uint8_t)MS5611_ADDR, (uint8_t)2);
         *C[i + 1] = ((uint16_t)Wire.read() << 8) | Wire.read();
+
+        #ifdef TEST_BAROMETER
         LOG_FMT("[BARO] C%d = %u", i + 1, *C[i + 1]);
+        #endif
     }
     return true;
 }
@@ -151,23 +151,23 @@ void Barometer::update()
         return;
 
     // MS5607 Formel
-    int32_t dT   = (int32_t)D2 - (int32_t)((uint32_t)_C5 << 8);
+    int32_t dT = (int32_t)D2 - (int32_t)((uint32_t)_C5 << 8);
     int32_t TEMP = 2000 + (int32_t)(((int64_t)dT * _C6) >> 23);
 
-    int64_t OFF  = ((int64_t)_C2 << 17) + (((int64_t)_C4 * dT) >> 6);
+    int64_t OFF = ((int64_t)_C2 << 17) + (((int64_t)_C4 * dT) >> 6);
     int64_t SENS = ((int64_t)_C1 << 16) + (((int64_t)_C3 * dT) >> 7);
-    int32_t P    = (int32_t)(((((int64_t)D1 * SENS) >> 21) - OFF) >> 15);
+    int32_t P = (int32_t)(((((int64_t)D1 * SENS) >> 21) - OFF) >> 15);
 
     _temperature = TEMP / 100.0f;
-    _pressure    = P    / 100.0f;
+    _pressure = P / 100.0f;
 
     // Temperaturkompensation
     float tempDiff = _temperature - _calTemp;
     float compensatedPressure = _pressure + (tempDiff * BARO_TEMP_COEFF);
 
-    float ratio     = compensatedPressure / _refPressure;
+    float ratio = compensatedPressure / _refPressure;
     float altitudeM = 44330.0f * (1.0f - pow(ratio, 0.1902949f));
-    _altitudeCm     = _applyFilter(altitudeM * 100.0f);
+    _altitudeCm = _applyFilter(altitudeM * 100.0f);
     delay(50);
 }
 
