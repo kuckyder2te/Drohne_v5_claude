@@ -11,7 +11,7 @@
 // #define TEST_KEYBOARD
 // #define TEST_I2C_SCAN
 // #define TEST_IMU
-#define TEST_ULTRASONIC
+// #define TEST_ULTRASONIC
 
 // Temperaturkompensation: Druckkorrektur pro °C Temperaturdifferenz
 // Empirisch ermittelt für MS5607 Sensor

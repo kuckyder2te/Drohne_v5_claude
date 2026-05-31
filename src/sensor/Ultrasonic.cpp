@@ -2,6 +2,7 @@
 #include "myLogger.h"
 #include "pins.h"
 
+
 void Ultrasonic::begin()
 {
     pinMode(PIN_ULTRASONIC_TRIG1, OUTPUT);
@@ -18,6 +19,10 @@ void Ultrasonic::begin()
 
 void Ultrasonic::update()
 {
+    // baro.update();       // Druck
+    // ultrasonic.update(); // ← NEU!
+    // imu.update();
+
     _trigger();
     float d1 = _measureCm(PIN_ULTRASONIC_ECHO1);
     delay(30);

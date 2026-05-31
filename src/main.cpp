@@ -176,6 +176,8 @@ void setup()
             delay(1000);
     }
 
+    ultrasonic.begin(); // ← NEU!
+
     motors.begin();
     pidHeight.begin();
     keyboard.begin();
@@ -189,7 +191,8 @@ void setup()
         pidHeight.setKd(kd);
     }
 
-    // IMU immer starten — unabhaengig von EEPROM
+    battery.begin(); // ← prüfen ob schon da!
+
     if (!imu.begin(false))
     {
         LOG("WARNUNG: IMU nicht gefunden!");
@@ -197,7 +200,7 @@ void setup()
 
     printHelp();
     LOG("[CTRL] Bereit — 'a' zum Armen");
-#endif // TEST_ULTRASONIC    
+#endif // TEST_ULTRASONIC
 #endif // TEST_I2C_SCAN
 #endif // TEST_IMU
 #endif // TEST_KEYBOARD
@@ -209,7 +212,7 @@ void setup()
 void loop()
 {
     battery.update();
-    ultrasonic.update();
+//    ultrasonic.update();
 
 // ── TEST_ULTRASONIC ────────────────────────────────────
 #ifdef TEST_ULTRASONIC
@@ -349,8 +352,10 @@ void loop()
 #ifndef TEST_KEYBOARD
 #ifndef TEST_IMU
 #ifndef TEST_I2C_SCAN
+#ifndef TEST_ULTRASONIC // ← NEU!
 
-    baro.update();// Druck
+    baro.update();       // Druck
+    ultrasonic.update(); // ← hinzufügen!
     imu.update();
 
     // Dann BT PID-Konfiguration
@@ -443,7 +448,9 @@ void loop()
         lastPidMs = millis();
 
         // Hoehenregelung
-        float throttle = pidHeight.compute(targetHeightCm, baro.getAltitudeCm());
+
+        float currentHeight = ultrasonic.isValid() ? ultrasonic.getAltitudeCm() : baro.getAltitudeCm();
+        float throttle = pidHeight.compute(targetHeightCm, currentHeight);
 
         // Lageregelung
         float rollCorr = pidRoll.compute(TARGET_ROLL_DEG, imu.getRoll());
@@ -457,14 +464,16 @@ void loop()
     if (millis() - lastPrintMs >= 500)
     {
         lastPrintMs = millis();
-        LOG_FMT("[CTRL] Ziel: %.1f cm | Ist: %.1f cm | Throttle: %.0f us | Armed: %s | Bat: %.2fV",
+        LOG_FMT("[CTRL] Ziel: %.1f cm | Ist: %.1f cm | Throttle: %.0f us | Armed: %s | Bat: %.2fV | Druck: %.2f hPa",
                 targetHeightCm,
-                baro.getAltitudeCm(),
+                ultrasonic.isValid() ? ultrasonic.getAltitudeCm() : baro.getAltitudeCm(),
                 pidHeight.getLastThrottle(),
                 armed ? "JA" : "NEIN",
-                battery.getVoltage()); // ← innerhalb LOG_FMT!
+                battery.getVoltage(),
+                baro.getPressure());
     }
 
+#endif // TEST_ULTRASONIC  // ← NEU!
 #endif // TEST_I2C_SCAN
 #endif // TEST_IMU
 #endif // TEST_KEYBOARD
