@@ -1,16 +1,17 @@
 #pragma once
 
 // ── Debug Ausgabe ──────────────────────────────────────────
-#define _SERIAL_LOG       // ← USB Serial aktiv
-#define _BT_LOG         // ← Bluetooth Log aktiv - Commented out for breadboard testing
-                        // beide auskommentieren = kein Log
+#define _SERIAL_LOG // ← USB Serial aktiv
+#define _BT_LOG     // ← Bluetooth Log aktiv - Commented out for breadboard testing
+                    // beide auskommentieren = kein Log
 
 // ── Test-Modi (auskommentieren = deaktiviert) ──────────────
 // #define TEST_MOTORS
 // #define TEST_BAROMETER
 // #define TEST_KEYBOARD
 // #define TEST_I2C_SCAN
-// #define TEST_IMU 
+// #define TEST_IMU
+#define TEST_ULTRASONIC
 
 // Temperaturkompensation: Druckkorrektur pro °C Temperaturdifferenz
 // Empirisch ermittelt für MS5607 Sensor
@@ -37,21 +38,21 @@
 #define EEPROM_SIZE 16
 
 // ── PID Hoehe ──────────────────────────────────────────────
-#define PID_KP_HEIGHT       2.0f
-#define PID_KI_HEIGHT       0.03f
-#define PID_KD_HEIGHT       0.3f
+#define PID_KP_HEIGHT 2.0f
+#define PID_KI_HEIGHT 0.03f
+#define PID_KD_HEIGHT 0.3f
 
 // ── PID Roll/Pitch ─────────────────────────────────────────
-#define PID_KP_ROLL         0.5f   // klein anfangen!
-#define PID_KI_ROLL         0.0f
-#define PID_KD_ROLL         0.0f
-#define PID_KP_PITCH        0.5f
-#define PID_KI_PITCH        0.0f
-#define PID_KD_PITCH        0.0f
+#define PID_KP_ROLL 0.5f // klein anfangen!
+#define PID_KI_ROLL 0.0f
+#define PID_KD_ROLL 0.0f
+#define PID_KP_PITCH 0.5f
+#define PID_KI_PITCH 0.0f
+#define PID_KD_PITCH 0.0f
 
 // ── Sollwerte Lage ─────────────────────────────────────────
-#define TARGET_ROLL_DEG     0.0f
-#define TARGET_PITCH_DEG    0.0f
+#define TARGET_ROLL_DEG 0.0f
+#define TARGET_PITCH_DEG 0.0f
 
 // ── PID Startwerte ─────────────────────────────────────────
 #define PID_KP_HEIGHT 2.0f

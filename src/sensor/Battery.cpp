@@ -12,14 +12,12 @@ void Battery::begin() {
 void Battery::update() {
     uint32_t now = millis();
 
-    // Buzzer non-blocking aktualisieren
     _updateBuzzer();
 
-    // Spannung nur alle 1000ms messen
     if (now - _lastCheck < 1000) return;
     _lastCheck = now;
 
-    // Spannung messen (5 Messungen mitteln)
+    // Spannung messen
     int raw = 0;
     for (int i = 0; i < 5; i++) {
         raw += analogRead(BATTERY);
@@ -27,17 +25,13 @@ void Battery::update() {
     raw /= 5;
     _voltage = (raw / BATTERY_ADC_MAX) * BATTERY_VREF * BATTERY_FACTOR;
 
-    // Warnstufen
+    // Warnstufen — eigener Timer!
     if (_voltage < BATTERY_CRIT_V) {
-        // Kritisch: 3x piepen alle 5s
-        if (now - _lastCheck >= 5000 || _beepCount == 0) {
-//            LOG_FMT("[BAT] KRITISCH: %.2fV", _voltage);
+        if (_beepCount == 0) {  // ← nur wenn kein Beep läuft
             _startBeep(3);
         }
     } else if (_voltage < BATTERY_WARN_V) {
-        // Warnung: 1x piepen alle 10s
-        if (now - _lastCheck >= 10000 || _beepCount == 0) {
-//            LOG_FMT("[BAT] WARNUNG: %.2fV", _voltage);
+        if (_beepCount == 0) {  // ← nur wenn kein Beep läuft
             _startBeep(1);
         }
     }

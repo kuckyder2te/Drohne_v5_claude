@@ -1,10 +1,10 @@
 #pragma once
 
 // ── Motoren (PWM) ──────────────────────────────────────────
-#define PIN_MOTOR_FL 11 // Front Left
-#define PIN_MOTOR_FR 12 // Front Right
-#define PIN_MOTOR_BL 14 // Back Left
-#define PIN_MOTOR_BR 13 // Back Right
+#define PIN_MOTOR_FL 12 // Front Left
+#define PIN_MOTOR_FR 13 // Front Right
+#define PIN_MOTOR_BL 15 // Back Left
+#define PIN_MOTOR_BR 14 // Back Right
 
 // I²C Pins
 #define PIN_SDA 4
@@ -23,7 +23,15 @@
 #define PIN_NRF_CE 20
 #define PIN_NRF_INT 3
 
-// ── Sonstige Pins ────────────────────────────────
+// ── Ultrasonic  HC-SR04──────────────────────────
+#define PIN_ULTRASONIC_TRIG1 8
+#define PIN_ULTRASONIC_ECHO1 6
+// #define PIN_ULTRASONIC_TRIG1 9  // für späteren Einsatz eines zweiten Sensors reserviert
+// #define PIN_ULTRASONIC_ECHO2 8  // für späteren Einsatz eines zweiten Sensors reserviert
 
+// ── Sonstige Pins ────────────────────────────────
 #define BUZZER 10
 #define BATTERY 26  // ADC0
+
+
+

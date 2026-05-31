@@ -10,11 +10,13 @@
 #include "storage/Settings.h"
 #include "sensor/IMU.h"
 #include "sensor/Battery.h"
+#include "sensor/Ultrasonic.h"
 
 MotorMixer motors;
 Barometer baro;
 Battery battery;
 KeyboardInput keyboard;
+Ultrasonic ultrasonic;
 PIDController pidHeight(PID_KP_HEIGHT, PID_KI_HEIGHT, PID_KD_HEIGHT, true); // mit Offset
 PIDController pidRoll(PID_KP_ROLL, PID_KI_ROLL, PID_KD_ROLL, false);        // ohne Offset
 PIDController pidPitch(PID_KP_PITCH, PID_KI_PITCH, PID_KD_PITCH, false);    // ohne Offset
@@ -89,6 +91,7 @@ void setup()
     delay(2000);
 
     battery.begin();
+    ultrasonic.begin();
 
     // BT zuerst starten — damit LOG() auf BT ausgeben kann
     btConfig.begin(); // Commented out for breadboard testing
@@ -99,6 +102,11 @@ void setup()
 
     // Jetzt erst LOG verwenden
     LOG("=== DROHNE PICO BOOT ====");
+
+#ifdef TEST_ULTRASONIC
+    LOG(">> Modus: ULTRASCHALL TEST");
+    ultrasonic.begin();
+#endif
 
 #ifdef TEST_I2C_SCAN
     Wire.setSDA(PIN_SDA);
@@ -154,6 +162,7 @@ void setup()
 #ifndef TEST_KEYBOARD
 #ifndef TEST_IMU
 #ifndef TEST_I2C_SCAN
+#ifndef TEST_ULTRASONIC
     LOG(">> Modus: NORMALBETRIEB");
 
     Wire.setSDA(PIN_SDA);
@@ -188,6 +197,7 @@ void setup()
 
     printHelp();
     LOG("[CTRL] Bereit — 'a' zum Armen");
+#endif // TEST_ULTRASONIC    
 #endif // TEST_I2C_SCAN
 #endif // TEST_IMU
 #endif // TEST_KEYBOARD
@@ -199,6 +209,25 @@ void setup()
 void loop()
 {
     battery.update();
+    ultrasonic.update();
+
+// ── TEST_ULTRASONIC ────────────────────────────────────
+#ifdef TEST_ULTRASONIC
+    ultrasonic.update();
+    static uint32_t lastUltra = 0;
+    if (millis() - lastUltra >= 200)
+    {
+        lastUltra = millis();
+        if (ultrasonic.isValid())
+        {
+            LOG_FMT("[ULTRA] Hoehe: %.1f cm", ultrasonic.getAltitudeCm());
+        }
+        else
+        {
+            LOG("[ULTRA] Kein Signal!");
+        }
+    }
+#endif
 
     // ── TEST_IMU ──────────────────────────────────────────
 #ifdef TEST_IMU
@@ -214,28 +243,52 @@ void loop()
 
     // ── TEST_MOTORS ────────────────────────────────────────
 #ifdef TEST_MOTORS
-    if (Serial.available())
+
+    // Batterie alle 5s anzeigen
+    static uint32_t lastBat = 0;
+    static bool firstRun = true;
+    if (firstRun)
     {
-        char cmd = Serial.read();
+        lastBat = millis();
+        firstRun = false;
+    }
+
+    if (millis() - lastBat >= 5000)
+    {
+        lastBat = millis();
+        LOG_FMT("[BAT] %.2fV", battery.getVoltage());
+    }
+
+    // Serial oder BT
+    char cmd = 0;
+    if (Serial.available())
+        cmd = Serial.read();
+    else if (BT_UART.available())
+        cmd = BT_UART.read();
+
+    if (cmd != 0)
+    {
         switch (cmd)
         {
-        case '+':
-            currentThrottle += THROTTLE_STEP;
-            motors.setThrottle(currentThrottle);
-            break;
-        case '-':
-            currentThrottle -= THROTTLE_STEP;
-            motors.setThrottle(currentThrottle);
-            break;
-        case 's':
-        case 'S':
-            currentThrottle = ESC_MIN_US;
-            motors.stop();
-            break;
-        case 'h':
-        case 'H':
-            printMotorHelp();
-            break;
+            {
+            case '+':
+                currentThrottle += THROTTLE_STEP;
+                motors.setThrottle(currentThrottle);
+                break;
+            case '-':
+                currentThrottle -= THROTTLE_STEP;
+                motors.setThrottle(currentThrottle);
+                break;
+            case 's':
+            case 'S':
+                currentThrottle = ESC_MIN_US;
+                motors.stop();
+                break;
+            case 'h':
+            case 'H':
+                printMotorHelp();
+                break;
+            }
         }
     }
 #endif
@@ -297,7 +350,7 @@ void loop()
 #ifndef TEST_IMU
 #ifndef TEST_I2C_SCAN
 
-    baro.update();
+    baro.update();// Druck
     imu.update();
 
     // Dann BT PID-Konfiguration

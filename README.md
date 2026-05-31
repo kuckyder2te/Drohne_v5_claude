@@ -28,7 +28,7 @@
 | MCU | Raspberry Pi Pico | — |
 | IMU + Barometer | CJMCU-10DOF | I2C / SPI |
 | IMU | MPU9250 (auf CJMCU-10DOF) | SPI (Phase 3) |
-| Barometer | MS5611 (auf CJMCU-10DOF) | I2C |
+| Barometer | MS5611 (auf CJMCU-10DOF) | I2C | 0x77 |
 | Funk | NRF24L01 | SPI (Phase 2) |
 | Bluetooth | HC-06 | UART0 |
 | Motoren | 4x Brushless + ESC | PWM (nativer RP2040 SDK) |
