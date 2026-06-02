@@ -42,6 +42,7 @@ void printMotorHelp()
 }
 #endif
 
+
 // ── Hilfsfunktionen ────────────────────────────────────────
 void i2cScan()
 {
@@ -135,6 +136,12 @@ void setup()
     motors.begin();
 #endif
 
+#ifdef TEST_MOTORS_SINGLE
+    LOG(">> Modus: EINZELMOTOR TEST");
+    LOG("1=FL 2=FR 3=BR 4=BL + - s");
+    motors.begin();
+#endif
+
 #ifdef TEST_BAROMETER
     LOG(">> Modus: BAROMETER TEST");
     if (!baro.begin())
@@ -158,6 +165,7 @@ void setup()
 #endif
 
 #ifndef TEST_MOTORS
+#ifndef TEST_MOTORS_SINGLE
 #ifndef TEST_BAROMETER
 #ifndef TEST_KEYBOARD
 #ifndef TEST_IMU
@@ -205,6 +213,7 @@ void setup()
 #endif // TEST_IMU
 #endif // TEST_KEYBOARD
 #endif // TEST_BAROMETER
+#endif // TEST_MOTORS_SINGLE
 #endif // TEST_MOTORS
 }
 
@@ -292,6 +301,71 @@ void loop()
                 printMotorHelp();
                 break;
             }
+        }
+    }
+#endif
+
+#ifdef TEST_MOTORS_SINGLE
+    static uint16_t singleThrottle = ESC_MIN_US;
+    static uint8_t activeMotor = 0;
+
+    static uint32_t lastBatS = 0;
+    if (millis() - lastBatS >= 5000) {
+        lastBatS = millis();
+        LOG_FMT("[BAT] %.2fV", battery.getVoltage());
+    }
+
+    char cmd = 0;
+    if (Serial.available()) cmd = Serial.read();
+    else if (BT_UART.available()) cmd = BT_UART.read();
+
+    if (cmd != 0) {
+        switch (cmd) {
+        case '1':
+            activeMotor = 1;
+            singleThrottle = ESC_MIN_US;
+            motors.stop();
+            LOG("[MOTOR] FL aktiv");
+            break;
+        case '2':
+            activeMotor = 2;
+            singleThrottle = ESC_MIN_US;
+            motors.stop();
+            LOG("[MOTOR] FR aktiv");
+            break;
+        case '3':
+            activeMotor = 3;
+            singleThrottle = ESC_MIN_US;
+            motors.stop();
+            LOG("[MOTOR] BR aktiv");
+            break;
+        case '4':
+            activeMotor = 4;
+            singleThrottle = ESC_MIN_US;
+            motors.stop();
+            LOG("[MOTOR] BL aktiv");
+            break;
+        case '+':
+            if (activeMotor > 0) {
+                singleThrottle = constrain(singleThrottle + THROTTLE_STEP, ESC_MIN_US, ESC_MAX_US);
+                motors.setSingle(activeMotor, singleThrottle);
+                LOG_FMT("[MOTOR] Throttle: %d us", singleThrottle);
+            }
+            break;
+        case '-':
+            if (activeMotor > 0) {
+                singleThrottle = constrain(singleThrottle - THROTTLE_STEP, ESC_MIN_US, ESC_MAX_US);
+                motors.setSingle(activeMotor, singleThrottle);
+                LOG_FMT("[MOTOR] Throttle: %d us", singleThrottle);
+            }
+            break;
+        case 's':
+        case 'S':
+            activeMotor = 0;
+            singleThrottle = ESC_MIN_US;
+            motors.stop();
+            LOG("[MOTOR] STOP");
+            break;
         }
     }
 #endif

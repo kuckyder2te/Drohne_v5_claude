@@ -12,6 +12,7 @@
 // #define TEST_I2C_SCAN
 // #define TEST_IMU
 // #define TEST_ULTRASONIC
+ #define TEST_MOTORS_SINGLE  // ← einzelne Motoren testen
 
 // Temperaturkompensation: Druckkorrektur pro °C Temperaturdifferenz
 // Empirisch ermittelt für MS5607 Sensor
@@ -62,4 +63,4 @@
 // ── Regelkreis ─────────────────────────────────────────────
 #define PID_INTERVAL_MS 50      // 20 Hz Regelfrequenz
 #define THROTTLE_MIN_CM 5       // Untergrenze Zielhöhe
-#define THROTTLE_OFFSET_US 1100 // Basis-Throttle: Motoren laufen an
+#define THROTTLE_OFFSET_US 1400 // Basis-Throttle: Motoren laufen an
