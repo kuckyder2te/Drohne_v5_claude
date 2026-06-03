@@ -184,8 +184,7 @@ void setup()
             delay(1000);
     }
 
-    ultrasonic.begin(); // ← NEU!
-
+    ultrasonic.begin();
     motors.begin();
     pidHeight.begin();
     keyboard.begin();
@@ -208,6 +207,7 @@ void setup()
 
     printHelp();
     LOG("[CTRL] Bereit — 'a' zum Armen");
+
 #endif // TEST_ULTRASONIC
 #endif // TEST_I2C_SCAN
 #endif // TEST_IMU
@@ -221,7 +221,6 @@ void setup()
 void loop()
 {
     battery.update();
-//    ultrasonic.update();
 
 // ── TEST_ULTRASONIC ────────────────────────────────────
 #ifdef TEST_ULTRASONIC
@@ -422,14 +421,15 @@ void loop()
 
     // ── NORMALBETRIEB ──────────────────────────────────────
 #ifndef TEST_MOTORS
+#ifndef TEST_MOTORS_SINGLE
 #ifndef TEST_BAROMETER
 #ifndef TEST_KEYBOARD
 #ifndef TEST_IMU
 #ifndef TEST_I2C_SCAN
-#ifndef TEST_ULTRASONIC // ← NEU!
+#ifndef TEST_ULTRASONIC
 
-    baro.update();       // Druck
-    ultrasonic.update(); // ← hinzufügen!
+    baro.update();
+    ultrasonic.update();
     imu.update();
 
     // Dann BT PID-Konfiguration
@@ -486,8 +486,8 @@ void loop()
             armed = true;
             targetHeightCm = 20.0f;
             pidHeight.reset();
-            pidRoll.reset();  // ← NEU
-            pidPitch.reset(); // ← NEU
+            pidRoll.reset();
+            pidPitch.reset();
             LOG("[CTRL] ARM — Ziel: 20 cm");
         }
         break;
@@ -552,5 +552,6 @@ void loop()
 #endif // TEST_IMU
 #endif // TEST_KEYBOARD
 #endif // TEST_BAROMETER
+#endif // TEST_MOTORS_SINGLE
 #endif // TEST_MOTORS
 }

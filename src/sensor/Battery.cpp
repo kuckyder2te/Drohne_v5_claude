@@ -3,8 +3,8 @@
 #include "pins.h"
 
 void Battery::begin() {
-    pinMode(BUZZER, OUTPUT);
-    digitalWrite(BUZZER, LOW);
+    // pinMode(BUZZER, OUTPUT);
+    // digitalWrite(BUZZER, LOW);
     analogReadResolution(12);
     LOG("[BAT] Batterie-Ueberwachung gestartet");
 }
@@ -44,9 +44,10 @@ void Battery::_startBeep(int count) {
 }
 
 void Battery::_updateBuzzer() {
+    return;
     if (_beepCount <= 0) {
         digitalWrite(BUZZER, LOW);
-        return;
+        
     }
 
     uint32_t now = millis();
