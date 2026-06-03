@@ -11,13 +11,14 @@
 1. [Hardware](#hardware)
 2. [Pinbelegung](#pinbelegung)
 3. [Projektstruktur](#projektstruktur)
-4. [Bibliotheken](#bibliotheken)
-5. [Konfiguration](#konfiguration)
-6. [Test-Modi](#test-modi)
-7. [Bluetooth-Befehle](#bluetooth-befehle)
-8. [Entwicklungsstand](#entwicklungsstand)
-9. [Bekannte Probleme & Lösungen](#bekannte-probleme--lösungen)
-10. [Entwicklungsregeln](#entwicklungsregeln)
+4. [Klassendiagramm](#klassendiagramm)
+5. [Bibliotheken](#bibliotheken)
+6. [Konfiguration](#konfiguration)
+7. [Test-Modi](#test-modi)
+8. [Bluetooth-Befehle](#bluetooth-befehle)
+9. [Entwicklungsstand](#entwicklungsstand)
+10. [Bekannte Probleme & Lösungen](#bekannte-probleme--lösungen)
+11. [Entwicklungsregeln](#entwicklungsregeln)
 
 ---
 
@@ -155,6 +156,123 @@ drone_pico/
 ```
 
 > **Konvention:** `.h` in `include/`, `.cpp` in `src/`. PlatformIO findet Header automatisch.
+
+---
+
+## Klassendiagramm
+
+```mermaid
+classDiagram
+    class MotorMixer {
+        -uint16_t _fl
+        -uint16_t _fr
+        -uint16_t _bl
+        -uint16_t _br
+        +begin()
+        +setThrottle(throttle_us)
+        +mix(throttle, roll, pitch, yaw)
+        +setSingle(motor, throttle)
+        +stop()
+    }
+
+    class PIDController {
+        -float _kp
+        -float _ki
+        -float _kd
+        -float _integral
+        -bool _useOffset
+        +PIDController(kp, ki, kd, useOffset)
+        +compute(setpoint, measured) float
+        +reset()
+        +setKp(kp)
+        +setKi(ki)
+        +setKd(kd)
+        +getKp() float
+        +getKi() float
+        +getKd() float
+    }
+
+    class IMU {
+        -float _roll
+        -float _pitch
+        -float _yaw
+        -bool _ready
+        +begin(initWire) bool
+        +update() bool
+        +calibrate()
+        +getRoll() float
+        +getPitch() float
+        +getYaw() float
+        +isReady() bool
+    }
+
+    class Barometer {
+        -float _altitudeCm
+        -float _pressure
+        -float _temperature
+        -float _refPressure
+        +begin() bool
+        +update()
+        +calibrate()
+        +getAltitudeCm() float
+        +getPressure() float
+        +getTemperature() float
+    }
+
+    class Ultrasonic {
+        -float _altitudeCm
+        -bool _valid
+        +begin()
+        +update()
+        +getAltitudeCm() float
+        +isValid() bool
+    }
+
+    class Battery {
+        -float _voltage
+        +begin()
+        +update()
+        +getVoltage() float
+        +isWarning() bool
+        +isCritical() bool
+    }
+
+    class KeyboardInput {
+        -uint8_t _escState
+        -String _btBuffer
+        +begin()
+        +getKey() KeyEvent
+        +getBTCommand() String
+    }
+
+    class KeyEvent {
+        <<enumeration>>
+        NONE
+        ARROW_UP
+        ARROW_DOWN
+        KEY_A
+        KEY_S
+        KEY_H
+        KEY_R
+    }
+
+    class BluetoothConfig {
+        +begin()
+        +processCommand(cmd, pidHeight, pidRoll, pidPitch, settings)
+        +update(pidHeight, pidRoll, pidPitch, settings)
+    }
+
+    class Settings {
+        +begin()
+        +save(kp, ki, kd)
+        +load(kp, ki, kd) bool
+        +reset()
+    }
+
+    KeyboardInput --> KeyEvent : liefert
+    BluetoothConfig ..> PIDController : stimmt ab
+    BluetoothConfig ..> Settings : speichert in
+```
 
 ---
 
