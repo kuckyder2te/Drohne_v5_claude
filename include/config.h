@@ -7,13 +7,12 @@
 
 // ── Test-Modi (auskommentieren = deaktiviert) ──────────────
 // #define TEST_MOTORS
- #define TEST_MOTORS_SINGLE  // ← einzelne Motoren testen
+// #define TEST_MOTORS_SINGLE  // ← einzelne Motoren testen
 // #define TEST_BAROMETER
 // #define TEST_KEYBOARD
 // #define TEST_I2C_SCAN
 // #define TEST_IMU
 // #define TEST_ULTRASONIC
- 
 
 // Temperaturkompensation: Druckkorrektur pro °C Temperaturdifferenz
 // Empirisch ermittelt für MS5607 Sensor
@@ -39,11 +38,6 @@
 #define EEPROM_ADDR_KD 8
 #define EEPROM_SIZE 16
 
-// ── PID Hoehe ──────────────────────────────────────────────
-#define PID_KP_HEIGHT 2.0f
-#define PID_KI_HEIGHT 0.03f
-#define PID_KD_HEIGHT 0.3f
-
 // ── PID Roll/Pitch ─────────────────────────────────────────
 #define PID_KP_ROLL 0.5f // klein anfangen!
 #define PID_KI_ROLL 0.0f
@@ -58,10 +52,10 @@
 
 // ── PID Startwerte ─────────────────────────────────────────
 #define PID_KP_HEIGHT 2.0f
-#define PID_KI_HEIGHT 0.03f
-#define PID_KD_HEIGHT 0.3f
+#define PID_KI_HEIGHT 0.0f
+#define PID_KD_HEIGHT 0.0f
 
 // ── Regelkreis ─────────────────────────────────────────────
 #define PID_INTERVAL_MS 50      // 20 Hz Regelfrequenz
 #define THROTTLE_MIN_CM 5       // Untergrenze Zielhöhe
-#define THROTTLE_OFFSET_US 1400 // Basis-Throttle: Motoren laufen an
+#define THROTTLE_OFFSET_US 1500 // Basis-Throttle: Motoren laufen an

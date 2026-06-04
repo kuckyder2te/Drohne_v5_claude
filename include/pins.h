@@ -3,8 +3,8 @@
 // ── Motoren (PWM) ──────────────────────────────────────────
 #define PIN_MOTOR_FL 11 // Front Left
 #define PIN_MOTOR_FR 12 // Front Right
-#define PIN_MOTOR_BL 14 // Back Left
 #define PIN_MOTOR_BR 13 // Back Right
+#define PIN_MOTOR_BL 14 // Back Left
 
 // I²C Pins
 #define PIN_SDA 4

@@ -526,6 +526,11 @@ void loop()
         float currentHeight = ultrasonic.isValid() ? ultrasonic.getAltitudeCm() : baro.getAltitudeCm();
         float throttle = pidHeight.compute(targetHeightCm, currentHeight);
 
+        // LOG_FMT("[DEBUG] Ultra valid: %d | Ultra: %.1f | Baro: %.1f",
+        // ultrasonic.isValid(),
+        // ultrasonic.getAltitudeCm(),
+        // baro.getAltitudeCm());
+
         // Lageregelung
         float rollCorr = pidRoll.compute(TARGET_ROLL_DEG, imu.getRoll());
         float pitchCorr = pidPitch.compute(TARGET_PITCH_DEG, imu.getPitch());

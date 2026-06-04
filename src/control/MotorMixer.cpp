@@ -67,20 +67,20 @@ void MotorMixer::setSingle(uint8_t motor, uint16_t throttle)
     switch (motor)
     {
     case 1:
+        _writePWM(PIN_MOTOR_FL, t);
+        LOG_FMT("[MOTOR] FL: %d us (PIN %d)", t, PIN_MOTOR_FL);
+        break;
+    case 2:
         _writePWM(PIN_MOTOR_FR, t);
         LOG_FMT("[MOTOR] FR: %d us (PIN %d)", t, PIN_MOTOR_FR);
         break;
-    case 2:
+    case 3:
         _writePWM(PIN_MOTOR_BR, t);
         LOG_FMT("[MOTOR] BR: %d us (PIN %d)", t, PIN_MOTOR_BR);
         break;
-    case 3:
+    case 4:
         _writePWM(PIN_MOTOR_BL, t);
         LOG_FMT("[MOTOR] BL: %d us (PIN %d)", t, PIN_MOTOR_BL);
-        break;
-    case 4:
-        _writePWM(PIN_MOTOR_FL, t);
-        LOG_FMT("[MOTOR] FL: %d us (PIN %d)", t, PIN_MOTOR_FL);
         break;
     default:
         LOG("[MOTOR] Unbekannter Motor!");
