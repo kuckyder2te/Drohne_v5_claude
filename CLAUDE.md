@@ -13,7 +13,7 @@ pio run
 # Upload to device
 pio run --target upload
 
-# Monitor serial output (COM8 @ 115200 baud)
+# Monitor serial output (COM10 @ 115200 baud)
 pio device monitor
 
 # Build + upload + monitor in one step
@@ -21,6 +21,8 @@ pio run --target upload && pio device monitor
 ```
 
 Build flags in `platformio.ini`: `-DGLOBAL_DEBUG` is always on. Test modes are enabled by uncommenting defines in [include/config.h](include/config.h).
+
+Logging is controlled by two flags in `config.h`: `_SERIAL_LOG` (USB Serial) and `_BT_LOG` (Bluetooth). Use `LOG(msg)` and `LOG_FMT(fmt, ...)` macros from [include/myLogger.h](include/myLogger.h) — they route to both outputs simultaneously when enabled.
 
 ## Architecture Overview
 
@@ -44,15 +46,16 @@ The main loop runs continuously at ~20 Hz for the PID step:
 |------|---------------|
 | [include/config.h](include/config.h) | All tunable parameters: ESC limits, PID defaults, test mode switches, filter sizes |
 | [include/pins.h](include/pins.h) | Single source of truth for all GPIO assignments |
+| [include/myLogger.h](include/myLogger.h) | `LOG`/`LOG_FMT` macros — dual output to USB Serial + BT UART |
 | [src/control/MotorMixer](src/control/MotorMixer.cpp) | PWM to ESCs using native RP2040 `hardware/pwm.h` SDK (50 Hz, 20000 wrap, 1000–2000 µs) |
-| [src/control/PIDController](src/control/PIDController.cpp) | Custom PID — height mode adds `ESC_OFFSET` so output is absolute throttle; attitude mode outputs pure correction |
-| [src/sensor/IMU](src/sensor/IMU.cpp) | MPU9250 via I2C; computes roll/pitch from atan2(accel); auto-recovers a hung I2C bus |
-| [src/sensor/Barometer](src/sensor/Barometer.cpp) | MS5607 (MS5611-compatible); 30 s warmup + 10 s thermal stabilization + 20-sample calibration at arm |
-| [src/sensor/Ultrasonic](src/sensor/Ultrasonic.cpp) | Dual HC-SR04; 5-sample moving average; preferred altitude source over barometer |
-| [src/sensor/Battery](src/sensor/Battery.cpp) | ADC pin 26, 100 k/20 k divider (×6), warns at 10.5 V / cuts at 10.0 V |
-| [src/comm/KeyboardInput](src/comm/KeyboardInput.cpp) | ANSI escape parser for USB Serial + BT UART; feeds command chars to main loop |
-| [src/comm/BluetoothConfig](src/comm/BluetoothConfig.cpp) | Real-time PID tuning via BT (`P=`, `I=`, `D=`, `RP=`, `RI=`, `RD=`, `S`, `R`) |
-| [src/storage/Settings](src/storage/Settings.cpp) | EEPROM persistence for PID coefficients (16 bytes, validated by marker 0xAB) |
+| [src/control/PIDController](src/control/PIDController.cpp) | Custom PID — height mode adds `ESC_OFFSET` so output is absolute throttle; attitude mode outputs pure correction; integral clamped ±500 |
+| [src/sensor/IMU](src/sensor/IMU.cpp) | **Custom I2C driver** for MPU9250 (0x68) — no external library; WHO_AM_I check (0x71/0x73/0x70); 100-sample gyro calibration at startup; roll/pitch from `atan2(accel)` only; I2C recovery via 9 SCL pulses |
+| [src/sensor/Barometer](src/sensor/Barometer.cpp) | MS5611 (0x77); 30 s warmup + 10 s thermal stabilization + 20-sample calibration at arm; 5-sample ring-buffer filter |
+| [src/sensor/Ultrasonic](src/sensor/Ultrasonic.cpp) | HC-SR04 on pins 8/6; 5-sample moving average; valid range 2–300 cm; preferred altitude source over barometer |
+| [src/sensor/Battery](src/sensor/Battery.cpp) | ADC pin 26, 100 k/20 k divider (×6); warns at 10.5 V (1 beep) / critical at 10.0 V (3 beeps) via buzzer pin 10 |
+| [src/comm/KeyboardInput](src/comm/KeyboardInput.cpp) | ANSI escape parser for USB Serial + BT UART; 3-state machine for escape sequences; buffers multi-char BT commands (e.g. `P=2.0`) until newline |
+| [src/comm/BluetoothConfig](src/comm/BluetoothConfig.cpp) | Real-time PID tuning via BT — height: `P=`, `I=`, `D=`; roll/pitch: `RP=`, `RI=`, `RD=`; `S` save to EEPROM, `R` reset, `?` query |
+| [src/storage/Settings](src/storage/Settings.cpp) | EEPROM persistence for height PID Kp/Ki/Kd (16 bytes @ 0x00–0x0C, validity marker 0xAB) |
 
 ### Test Modes
 
@@ -68,13 +71,23 @@ Defined in [include/config.h](include/config.h). Uncomment exactly one to run th
 
 ### Key Design Decisions
 
+- **Custom IMU driver** instead of MPU9250 library — avoids library version conflicts; direct register access enables tighter I2C error recovery
 - **Native RP2040 PWM SDK** (`hardware/pwm.h`) instead of `RP2040_PWM` library — more stable, no library dependency
 - **Custom PID** instead of FastPID — FastPID's coefficient clamping conflicted with required ranges
 - **Ultrasonic preferred over barometer** when in range (2–300 cm) — ±0.5 cm vs ±1 cm accuracy
 - **I2C bus recovery** in IMU — sends 9 clock pulses to release a stuck SDA line
 - **Barometer temperature coefficient** (`BARO_TEMP_COEFF` in config.h) — compensates for thermal drift per °C
+- **Yaw = 0** currently — gyro integration deferred to Phase 3; only accelerometer-based roll/pitch used
 
 ### Planned Phases (not yet implemented)
 
 - **Phase 2**: NRF24L01 remote control (library already in `platformio.ini`, SPI pins defined in `pins.h`)
-- **Phase 3**: Yaw stabilization using MPU9250 magnetometer
+- **Phase 3**: Yaw stabilization using MPU9250 magnetometer + gyro integration
+
+### Hardware Troubleshooting
+
+- **MS5611 not found**: check that PS and NCS pins on CJMCU-10DOF board are tied to 3.3 V
+- **Barometer drift indoors**: allow full 90 s warmup + recalibrate before arming
+- **Arrow keys not recognized**: use `pio device monitor`, not the VS Code built-in Serial Monitor
+- **Pico not detected by picotool**: hold BOOTSEL, load `flash_nuke.uf2`, then re-flash
+- **MPU9250 WHO_AM_I mismatch**: some clones report 0x70 or 0x73 — all three are accepted

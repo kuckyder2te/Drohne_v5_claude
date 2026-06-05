@@ -34,6 +34,7 @@ KeyEvent KeyboardInput::getKey() {
                         case 'R': return KeyEvent::KEY_R;
                         case '+': return KeyEvent::ARROW_UP;
                         case '-': return KeyEvent::ARROW_DOWN;
+                        default:  _btCommand = String(ch); return KeyEvent::NONE;
                     }
                 }
                 // Mehrzeichen → BT Befehl (P=x, I=x etc.)
