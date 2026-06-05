@@ -45,42 +45,6 @@ bool Barometer::begin()
 #endif
 
     LOG("[BARO] MS5611(MS5607) gefunden");
-
-    // 5. Aufwärmzeit
-    LOG("[BARO] Aufwaermzeit 30s...");
-    for (int i = 30; i > 0; i--)
-    {
-        update();
-        if (i % 10 == 0)
-        {
-            LOG_FMT("[BARO] Noch %d s...", i);
-        }
-        delay(1000);
-    }
-
-    // Warten bis Temperatur stabil
-    LOG("[BARO] Warte auf thermische Stabilisierung...");
-    float lastTemp = 0;
-    int stableCount = 0;
-    do
-    {
-        lastTemp = _temperature;
-        update();
-        delay(1000);
-        if (abs(_temperature - lastTemp) < 0.05f)
-        {
-            stableCount++;
-        }
-        else
-        {
-            stableCount = 0;
-        }
-        LOG_FMT("[BARO] Temp: %.1f C | Stabil: %d/10", _temperature, stableCount);
-    } while (stableCount < 10); // 5 stabile Messungen
-
-    LOG("[BARO] Temperatur stabil!");
-
-    calibrate();
     return true;
 }
 
