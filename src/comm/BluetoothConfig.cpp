@@ -64,20 +64,18 @@ void BluetoothConfig::_processCommand(const String &cmd,
         pidPitch.setKi(cmd.substring(3).toFloat());
     } else if (param0 == 'P' && param1 == 'D') {
         pidPitch.setKd(cmd.substring(3).toFloat());
+    } else if (param0 == 'S') {
+        settings.save(pidHeight.getKp(), pidHeight.getKi(), pidHeight.getKd());
+        LOG("[BT] Gespeichert!");
+    } else if (param0 == 'R') {
+        settings.reset();
+        LOG("[BT] Reset!");
     } else if (cmd.length() >= 3 && cmd[1] == '=') {
         float value = cmd.substring(2).toFloat();
         switch (param0) {
             case 'P': pidHeight.setKp(value); break;
             case 'I': pidHeight.setKi(value); break;
             case 'D': pidHeight.setKd(value); break;
-            case 'S':
-                settings.save(pidHeight.getKp(), pidHeight.getKi(), pidHeight.getKd());
-                LOG("[BT] Gespeichert!");
-                break;
-            case 'R':
-                settings.reset();
-                LOG("[BT] Reset!");
-                break;
         }
     }
 }
