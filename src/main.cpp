@@ -36,9 +36,11 @@ uint32_t lastPrintMs = 0;
 uint16_t currentThrottle = ESC_MIN_US;
 void printMotorHelp()
 {
-    LOG("─────────────────────────────");
+    LOG("─────────────────────────────────────────");
     LOG(" MOTORTEST: + - s h");
-    LOG("─────────────────────────────");
+    LOG(" c = Kalibrierung starten (Strom trennen!)");
+    LOG(" k = Strom anlegen + MIN senden");
+    LOG("─────────────────────────────────────────");
 }
 #endif
 
@@ -299,6 +301,22 @@ void loop()
             case 'H':
                 printMotorHelp();
                 break;
+            case 'c':
+            case 'C':
+                LOG("[ESC] Kalibrierung: Strom vom ESC TRENNEN, dann 's' druecken");
+                LOG("[ESC] Sobald Strom getrennt: Pico sendet MAX (2000us)");
+                currentThrottle = ESC_MAX_US;
+                motors.setThrottle(currentThrottle);
+                break;
+            case 'k':
+            case 'K':
+                LOG("[ESC] Jetzt Strom an ESC anlegen — warte auf Piepstöne...");
+                delay(3000);
+                LOG("[ESC] Sende MIN (1000us)...");
+                currentThrottle = ESC_MIN_US;
+                motors.setThrottle(currentThrottle);
+                LOG("[ESC] Kalibrierung abgeschlossen (2x Pieps = OK)");
+                break;
             }
         }
     }
@@ -552,7 +570,7 @@ void loop()
                 baro.getPressure());
     }
 
-#endif // TEST_ULTRASONIC  // ← NEU!
+#endif // TEST_ULTRASONIC
 #endif // TEST_I2C_SCAN
 #endif // TEST_IMU
 #endif // TEST_KEYBOARD
