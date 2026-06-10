@@ -2,17 +2,17 @@
 
 // ── Debug Ausgabe ──────────────────────────────────────────
 #define _SERIAL_LOG // ← USB Serial aktiv
-// #define _BT_LOG     // ← Bluetooth Log aktiv - Commented out for breadboard testing
+#define _BT_LOG     // ← Bluetooth Log aktiv - Commented out for breadboard testing
                     // beide auskommentieren = kein Log
 
 // ── Test-Modi (auskommentieren = deaktiviert) ──────────────
 // #define TEST_MOTORS
- #define TEST_MOTORS_SINGLE  // ← einzelne Motoren testen
+// #define TEST_MOTORS_SINGLE  // ← einzelne Motoren testen
 // #define TEST_BAROMETER
 // #define TEST_KEYBOARD
 // #define TEST_I2C_SCAN
 // #define TEST_IMU
-// #define TEST_ULTRASONIC
+ #define TEST_ULTRASONIC
 
 // Temperaturkompensation: Druckkorrektur pro °C Temperaturdifferenz
 // Empirisch ermittelt für MS5607 Sensor
@@ -63,4 +63,4 @@
 // ── Anti-Windup: Liftoff-Schwelle ──────────────────────────
 // Integral-Term aktiv erst wenn Ultraschall > dieser Wert.
 // Anpassen falls Sensor nicht auf Bodenniveau montiert ist.
-#define LIFTOFF_HEIGHT_CM 5.0f  // cm über Boden = "abgehoben"
+#define LIFTOFF_HEIGHT_CM 6.0f  // cm über Boden = "abgehoben"

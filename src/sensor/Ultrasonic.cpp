@@ -8,54 +8,25 @@ void Ultrasonic::begin()
     pinMode(PIN_ULTRASONIC_TRIG1, OUTPUT);
     pinMode(PIN_ULTRASONIC_ECHO1, INPUT);
     digitalWrite(PIN_ULTRASONIC_TRIG1, LOW);
-
-    // pinMode(PIN_ULTRASONIC_TRIG2, OUTPUT);
-    // pinMode(PIN_ULTRASONIC_ECHO2, INPUT);
-    // digitalWrite(PIN_ULTRASONIC_TRIG2, LOW);
-
     delay(100);
     LOG("[ULTRA] HC-SR04 bereit");
 }
 
 void Ultrasonic::update()
 {
-    // baro.update();       // Druck
-    // ultrasonic.update(); // ← NEU!
-    // imu.update();
-
     _trigger();
-    float d1 = _measureCm(PIN_ULTRASONIC_ECHO1);
+    float d = _measureCm(PIN_ULTRASONIC_ECHO1);
     delay(30);
 
-    _trigger();
-    float d2 = _measureCm(PIN_ULTRASONIC_ECHO2); // ← einkommentieren
-    delay(30);
-
-    bool valid1 = (d1 >= ULTRASONIC_MIN_CM && d1 <= ULTRASONIC_MAX_CM);
-    bool valid2 = (d2 >= ULTRASONIC_MIN_CM && d2 <= ULTRASONIC_MAX_CM);
-
-    float result = 0.0f;
-    if (valid1 && valid2)
+    if (d >= ULTRASONIC_MIN_CM && d <= ULTRASONIC_MAX_CM)
     {
-        result = (d1 + d2) / 2.0f;
-        _valid = true;
-    }
-    else if (valid1)
-    {
-        result = d1;
-        _valid = true;
-    }
-    else if (valid2)
-    {
-        result = d2;
+        _altitudeCm = _applyFilter(d);
         _valid = true;
     }
     else
     {
         _valid = false;
-        return;
     }
-    _altitudeCm = _applyFilter(result);
 }
 
 void Ultrasonic::_trigger()

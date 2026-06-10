@@ -27,7 +27,7 @@
 #define PIN_ULTRASONIC_TRIG1 8
 #define PIN_ULTRASONIC_ECHO1 6
 // #define PIN_ULTRASONIC_TRIG1 9  // für späteren Einsatz eines zweiten Sensors reserviert
- #define PIN_ULTRASONIC_ECHO2 7  
+// #define PIN_ULTRASONIC_ECHO2 7  
 
 // ── Sonstige Pins ────────────────────────────────
 #define BUZZER 10
