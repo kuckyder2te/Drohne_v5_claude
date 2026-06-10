@@ -28,7 +28,7 @@ private:
     // Register-Zugriff
     void _writeReg(uint8_t reg, uint8_t val);
     uint8_t _readReg(uint8_t reg);
-    void _calcAngles();
+    void _calcAngles(float dt);
 
     // Messwerte
     float _roll = 0.0f;
@@ -46,4 +46,7 @@ private:
     float _gyroBiasX = 0.0f;
     float _gyroBiasY = 0.0f;
     float _gyroBiasZ = 0.0f;
+
+    uint32_t _lastUpdateUs = 0;
+    bool _firstUpdate = true;
 };

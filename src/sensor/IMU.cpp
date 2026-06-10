@@ -166,7 +166,12 @@ if (err != 0) {
         _gyroY = (gy_raw - _gyroBiasY) / 16.384f * (M_PI / 180.0f);
         _gyroZ = (gz_raw - _gyroBiasZ) / 16.384f * (M_PI / 180.0f);
 
-        _calcAngles();
+        uint32_t now = micros();
+        float dt = _firstUpdate ? 0.01f : (now - _lastUpdateUs) * 1e-6f;
+        _lastUpdateUs = now;
+        _firstUpdate = false;
+
+        _calcAngles(dt);
         return true;
     }
     while (Wire.available()) Wire.read();
@@ -175,9 +180,16 @@ if (err != 0) {
 
 // ── Winkelberechnung ──────────────────────────────────────
 
-void IMU::_calcAngles() {
-    _roll  = atan2f(_accelY, _accelZ) * 180.0f / M_PI;
-    _pitch = atan2f(-_accelX,
-             sqrtf(_accelY * _accelY + _accelZ * _accelZ)) * 180.0f / M_PI;
-    _yaw   = 0.0f;  // Yaw aus Gyro — Phase 3
+void IMU::_calcAngles(float dt) {
+    float accelRoll  = atan2f(_accelY, _accelZ) * 180.0f / M_PI;
+    float accelPitch = atan2f(-_accelX,
+                       sqrtf(_accelY * _accelY + _accelZ * _accelZ)) * 180.0f / M_PI;
+
+    // Komplementärfilter: Gyro integriert kurzfristige Bewegung,
+    // Accelerometer korrigiert langsamen Gyro-Drift.
+    // alpha=0.98 → Zeitkonstante ~500 ms, filtert Propellervibration heraus.
+    const float alpha = 0.98f;
+    _roll  = alpha * (_roll  + _gyroX * dt * (180.0f / M_PI)) + (1.0f - alpha) * accelRoll;
+    _pitch = alpha * (_pitch + _gyroY * dt * (180.0f / M_PI)) + (1.0f - alpha) * accelPitch;
+    _yaw   = 0.0f;
 }

@@ -15,6 +15,7 @@ public:
     float compute(float setpoint, float measured);
     float getLastThrottle() const { return _lastThrottle; }
     void  reset();
+    void  enableIntegral(bool enable);
 
     void  setKp(float kp);
     void  setKi(float ki);
@@ -32,10 +33,11 @@ private:
     float _lastError   = 0.0f;
     float _lastTime    = 0.0f;
 
-    // Anti-Windup: Integral begrenzen
-    float _integralMin = -500.0f;
-    float _integralMax =  500.0f;
-    bool  _useOffset   = true;   // ← NEU
+    // Anti-Windup: Integral begrenzen + Liftoff-Guard
+    float _integralMin     = -500.0f;
+    float _integralMax     =  500.0f;
+    bool  _useOffset       = true;
+    bool  _integralEnabled = false;
 
     float _clampCoeff(float val, const char* name);
 };

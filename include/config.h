@@ -2,12 +2,12 @@
 
 // ── Debug Ausgabe ──────────────────────────────────────────
 #define _SERIAL_LOG // ← USB Serial aktiv
-#define _BT_LOG     // ← Bluetooth Log aktiv - Commented out for breadboard testing
+// #define _BT_LOG     // ← Bluetooth Log aktiv - Commented out for breadboard testing
                     // beide auskommentieren = kein Log
 
 // ── Test-Modi (auskommentieren = deaktiviert) ──────────────
 // #define TEST_MOTORS
-// #define TEST_MOTORS_SINGLE  // ← einzelne Motoren testen
+ #define TEST_MOTORS_SINGLE  // ← einzelne Motoren testen
 // #define TEST_BAROMETER
 // #define TEST_KEYBOARD
 // #define TEST_I2C_SCAN
@@ -59,3 +59,8 @@
 #define PID_INTERVAL_MS 50      // 20 Hz Regelfrequenz
 #define THROTTLE_MIN_CM 5       // Untergrenze Zielhöhe
 #define THROTTLE_OFFSET_US 1500 // Basis-Throttle: Motoren laufen an
+
+// ── Anti-Windup: Liftoff-Schwelle ──────────────────────────
+// Integral-Term aktiv erst wenn Ultraschall > dieser Wert.
+// Anpassen falls Sensor nicht auf Bodenniveau montiert ist.
+#define LIFTOFF_HEIGHT_CM 5.0f  // cm über Boden = "abgehoben"

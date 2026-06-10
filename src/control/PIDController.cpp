@@ -46,8 +46,10 @@ float PIDController::compute(float setpoint, float measured)
     }
 
     float error = setpoint - measured;
-    _integral += error * dt;
-    _integral = constrain(_integral, _integralMin, _integralMax);
+    if (_integralEnabled) {
+        _integral += error * dt;
+        _integral = constrain(_integral, _integralMin, _integralMax);
+    }
     float derivative = (error - _lastError) / dt;
 
     // Basis-Offset + PID Output
@@ -94,4 +96,15 @@ void PIDController::setKd(float kd)
 {
     _kd = _clampCoeff(kd, "Kd");
     LOG_FMT("[PID] Kd=%.4f", _kd);
+}
+
+void PIDController::enableIntegral(bool enable)
+{
+    if (_integralEnabled && !enable) {
+        _integral = 0.0f; // Integral löschen beim Landen
+        LOG("[PID] Integral deaktiviert (Landung)");
+    } else if (!_integralEnabled && enable) {
+        LOG("[PID] Integral aktiv (abgehoben)");
+    }
+    _integralEnabled = enable;
 }

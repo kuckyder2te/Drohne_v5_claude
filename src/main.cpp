@@ -38,8 +38,9 @@ void printMotorHelp()
 {
     LOG("─────────────────────────────────────────");
     LOG(" MOTORTEST: + - s h");
-    LOG(" c = Kalibrierung starten (Strom trennen!)");
-    LOG(" k = Strom anlegen + MIN senden");
+    LOG(" c = Kalibrierung: LiPo ZUERST trennen");
+    LOG(" k = MAX senden (dann LiPo anstecken)");
+    LOG(" m = MIN senden (Kalibrierung fertig)");
     LOG("─────────────────────────────────────────");
 }
 #endif
@@ -303,16 +304,22 @@ void loop()
                 break;
             case 'c':
             case 'C':
-                LOG("[ESC] Kalibrierung: Strom vom ESC TRENNEN, dann 's' druecken");
-                LOG("[ESC] Sobald Strom getrennt: Pico sendet MAX (2000us)");
-                currentThrottle = ESC_MAX_US;
-                motors.setThrottle(currentThrottle);
+                LOG("[ESC] SCHRITT 1: Jetzt LiPo TRENNEN!");
+                LOG("[ESC] Dann 'k' druecken — Pico sendet danach MAX (2000us)");
+                LOG("[ESC] Erst nach 'k': LiPo wieder anstecken");
+                currentThrottle = ESC_MIN_US;
+                motors.stop();
                 break;
             case 'k':
             case 'K':
-                LOG("[ESC] Jetzt Strom an ESC anlegen — warte auf Piepstöne...");
-                delay(3000);
-                LOG("[ESC] Sende MIN (1000us)...");
+                LOG("[ESC] SCHRITT 2: Sende MAX (2000us) — jetzt LiPo anstecken!");
+                currentThrottle = ESC_MAX_US;
+                motors.setThrottle(currentThrottle);
+                LOG("[ESC] Warte auf ESC-Piepstoene, dann 'm' druecken");
+                break;
+            case 'm':
+            case 'M':
+                LOG("[ESC] SCHRITT 3: Sende MIN (1000us)...");
                 currentThrottle = ESC_MIN_US;
                 motors.setThrottle(currentThrottle);
                 LOG("[ESC] Kalibrierung abgeschlossen (2x Pieps = OK)");
@@ -539,15 +546,16 @@ void loop()
     {
         lastPidMs = millis();
 
-        // Hoehenregelung
+        // Liftoff-Erkennung: Integral erst aktiv wenn wirklich abgehoben
+        bool airborne = ultrasonic.isValid() &&
+                        (ultrasonic.getAltitudeCm() > LIFTOFF_HEIGHT_CM);
+        pidHeight.enableIntegral(airborne);
+        pidRoll.enableIntegral(airborne);
+        pidPitch.enableIntegral(airborne);
 
+        // Hoehenregelung
         float currentHeight = ultrasonic.isValid() ? ultrasonic.getAltitudeCm() : baro.getAltitudeCm();
         float throttle = pidHeight.compute(targetHeightCm, currentHeight);
-
-        // LOG_FMT("[DEBUG] Ultra valid: %d | Ultra: %.1f | Baro: %.1f",
-        // ultrasonic.isValid(),
-        // ultrasonic.getAltitudeCm(),
-        // baro.getAltitudeCm());
 
         // Lageregelung
         float rollCorr = pidRoll.compute(TARGET_ROLL_DEG, imu.getRoll());
