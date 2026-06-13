@@ -2,8 +2,8 @@
 
 // ── Debug Ausgabe ──────────────────────────────────────────
 #define _SERIAL_LOG // ← USB Serial aktiv
-#define _BT_LOG     // ← Bluetooth Log aktiv - Commented out for breadboard testing
-                    // beide auskommentieren = kein Log
+// #define _BT_LOG  // ← deaktiviert: HC-06 echot TX→RX zurück, füllt BT-Puffer
+                   // beide auskommentieren = kein Log
 
 // ── Test-Modi (auskommentieren = deaktiviert) ──────────────
 // #define TEST_MOTORS
@@ -12,7 +12,7 @@
 // #define TEST_KEYBOARD
 // #define TEST_I2C_SCAN
 // #define TEST_IMU
- #define TEST_ULTRASONIC
+// #define TEST_ULTRASONIC
 
 // Temperaturkompensation: Druckkorrektur pro °C Temperaturdifferenz
 // Empirisch ermittelt für MS5607 Sensor

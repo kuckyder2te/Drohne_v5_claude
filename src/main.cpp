@@ -5,8 +5,8 @@
 #include "control/MotorMixer.h"
 #include "control/PIDController.h"
 #include "sensor/Barometer.h"
-#include "comm/KeyboardInput.h"
-#include "comm/BluetoothConfig.h"
+#include "comm/SerialInput.h"
+#include "comm/BluetoothComm.h"
 #include "storage/Settings.h"
 #include "sensor/IMU.h"
 #include "sensor/Battery.h"
@@ -15,19 +15,22 @@
 MotorMixer motors;
 Barometer baro;
 Battery battery;
-KeyboardInput keyboard;
+SerialInput serialInput;
 Ultrasonic ultrasonic;
 PIDController pidHeight(PID_KP_HEIGHT, PID_KI_HEIGHT, PID_KD_HEIGHT, true); // mit Offset
 PIDController pidRoll(PID_KP_ROLL, PID_KI_ROLL, PID_KD_ROLL, false);        // ohne Offset
 PIDController pidPitch(PID_KP_PITCH, PID_KI_PITCH, PID_KD_PITCH, false);    // ohne Offset
 
-BluetoothConfig btConfig;
+BluetoothComm bt;
 Settings settings;
 IMU imu;
 
 // ── Zustandsvariablen ──────────────────────────────────────
 float targetHeightCm = 0.0f;
 bool armed = false;
+bool statusLogEnabled = true;
+bool armPending = false;
+uint32_t armPendingMs = 0;
 uint32_t lastPidMs = 0;
 uint32_t lastPrintMs = 0;
 
@@ -73,6 +76,7 @@ void printHelp()
     LOG(" a = ARM (Motoren ein)");
     LOG(" s = DISARM (Motoren aus)");
     LOG(" r = Barometer rekalibrieren");
+    LOG(" l = Statusausgabe ein/aus");
     LOG(" h = Hilfe");
     LOG("────────────────────────────────────");
 }
@@ -83,8 +87,8 @@ void disarm()
     targetHeightCm = 0.0f;
     motors.stop();
     pidHeight.reset();
-    pidRoll.reset();  // ← NEU
-    pidPitch.reset(); // ← NEU
+    pidRoll.reset();
+    pidPitch.reset();
     LOG("[CTRL] DISARM — Motoren gestoppt");
 }
 
@@ -97,14 +101,12 @@ void setup()
     battery.begin();
     ultrasonic.begin();
 
-    // BT zuerst starten — damit LOG() auf BT ausgeben kann
-    btConfig.begin(); // Commented out for breadboard testing
+    bt.begin();
 
     pidHeight.begin();
     pidRoll.begin();
     pidPitch.begin();
 
-    // Jetzt erst LOG verwenden
     LOG("=== DROHNE PICO BOOT ====");
 
 #ifdef TEST_ULTRASONIC
@@ -125,7 +127,7 @@ void setup()
 
     delay(1000);
 
-    if (!imu.begin(true)) // ← true = Wire initialisieren
+    if (!imu.begin(true))
     {
         LOG("FEHLER: IMU! Programm gestoppt.");
         while (true)
@@ -163,7 +165,7 @@ void setup()
         while (true)
             delay(1000);
     }
-    keyboard.begin();
+    serialInput.begin();
     printHelp();
 #endif
 
@@ -190,7 +192,7 @@ void setup()
     ultrasonic.begin();
     motors.begin();
     pidHeight.begin();
-    keyboard.begin();
+    serialInput.begin();
 
     settings.begin();
     float kp, ki, kd;
@@ -201,7 +203,7 @@ void setup()
         pidHeight.setKd(kd);
     }
 
-    battery.begin(); // ← prüfen ob schon da!
+    battery.begin();
 
     if (!imu.begin(false))
     {
@@ -258,7 +260,6 @@ void loop()
     // ── TEST_MOTORS ────────────────────────────────────────
 #ifdef TEST_MOTORS
 
-    // Batterie alle 5s anzeigen
     static uint32_t lastBat = 0;
     static bool firstRun = true;
     if (firstRun)
@@ -273,7 +274,6 @@ void loop()
         LOG_FMT("[BAT] %.2fV", battery.getVoltage());
     }
 
-    // Serial oder BT
     char cmd = 0;
     if (Serial.available())
         cmd = Serial.read();
@@ -406,13 +406,13 @@ void loop()
                 baro.getPressure(),
                 baro.getTemperature());
     }
-    LOG_FMT("[BAT] Spannung: %.2fV", battery.getVoltage()); // ← hinzufügen
+    LOG_FMT("[BAT] Spannung: %.2fV", battery.getVoltage());
 #endif
 
     // ── TEST_KEYBOARD ──────────────────────────────────────
 #ifdef TEST_KEYBOARD
     baro.update();
-    KeyEvent key = keyboard.getKey();
+    KeyEvent key = serialInput.getKey();
     switch (key)
     {
     case KeyEvent::ARROW_UP:
@@ -457,37 +457,40 @@ void loop()
     ultrasonic.update();
     imu.update();
 
-    // Dann BT PID-Konfiguration
-    btConfig.update(pidHeight, pidRoll, pidPitch, settings);
+    // ARM-Bestätigung Timeout
+    if (armPending && (millis() - armPendingMs > 3000))
+    {
+        armPending = false;
+        LOG("[CTRL] ARM abgebrochen (Timeout)");
+    }
 
     // Bei IMU Fehler oder Höhensprung → sofort DISARM
     if (armed)
     {
-        // IMU Fehler → sofort disarmen
         if (!imu.isReady())
         {
             LOG("[SAFETY] IMU Fehler — DISARM!");
             disarm();
         }
-        // Hoehensprung → disarmen
         static float lastHeight = 0;
         float h = baro.getAltitudeCm();
         if (abs(h - lastHeight) > 500.0f)
-        { // ← nur bei extremen Sprüngen
+        {
             LOG("[SAFETY] Hoehensprung — DISARM!");
             disarm();
         }
         lastHeight = h;
     }
 
-    // Tastatureingabe ZUERST
-    KeyEvent key = keyboard.getKey();
+    // Eingabe: USB zuerst, dann BT
+    KeyEvent key = serialInput.getKey();
+    if (key == KeyEvent::NONE) key = bt.getKey();
 
-    // BT String Befehle weiterleiten
-    String btCmd = keyboard.getBTCommand();
+    // BT Mehrzeichen-Befehle (PID-Tuning)
+    String btCmd = bt.getCommand();
     if (btCmd.length() > 0)
     {
-        btConfig.processCommand(btCmd, pidHeight, pidRoll, pidPitch, settings);
+        bt.processCommand(btCmd, pidHeight, pidRoll, pidPitch, settings);
     }
 
     switch (key)
@@ -495,46 +498,85 @@ void loop()
     case KeyEvent::ARROW_UP:
         targetHeightCm = constrain(targetHeightCm + 10.0f, THROTTLE_MIN_CM, MAX_HEIGHT_CM);
         LOG_FMT("[CTRL] Zielhoehe: %.1f cm", targetHeightCm);
+        { char buf[32]; snprintf(buf, sizeof(buf), "[CTRL] Zielhoehe: %.1f cm", targetHeightCm); bt.sendLine(buf); }
         break;
 
     case KeyEvent::ARROW_DOWN:
         targetHeightCm = constrain(targetHeightCm - 10.0f, THROTTLE_MIN_CM, MAX_HEIGHT_CM);
         LOG_FMT("[CTRL] Zielhoehe: %.1f cm", targetHeightCm);
+        { char buf[32]; snprintf(buf, sizeof(buf), "[CTRL] Zielhoehe: %.1f cm", targetHeightCm); bt.sendLine(buf); }
         break;
 
     case KeyEvent::KEY_A:
         if (!armed)
         {
-            LOG("[CTRL] Rekalibrierung vor ARM...");
-            baro.calibrate();
-            delay(500);
-            armed = true;
-            targetHeightCm = 20.0f;
-            pidHeight.reset();
-            pidRoll.reset();
-            pidPitch.reset();
-            LOG("[CTRL] ARM — Ziel: 20 cm");
+            if (!armPending)
+            {
+                armPending   = true;
+                armPendingMs = millis();
+                LOG("[CTRL] ARM? Nochmal 'a' druecken (3s)");
+                bt.sendLine("[CTRL] ARM? Nochmal 'a' druecken (3s)");
+            }
+            else if (millis() - armPendingMs <= 3000)
+            {
+                armPending = false;
+                if (!imu.isReady())
+                {
+                    LOG("[CTRL] ARM verweigert - IMU nicht bereit!");
+                    bt.sendLine("[CTRL] ARM verweigert - IMU nicht bereit!");
+                }
+                else
+                {
+                    LOG("[CTRL] Rekalibrierung vor ARM...");
+                    baro.calibrate();
+                    delay(500);
+                    armed          = true;
+                    targetHeightCm = 20.0f;
+                    lastPidMs      = millis();
+                    pidHeight.reset();
+                    pidRoll.reset();
+                    pidPitch.reset();
+                    LOG("[CTRL] ARM - Ziel: 20 cm");
+                    bt.sendLine("[CTRL] ARM - Ziel: 20 cm");
+                }
+            }
+            else
+            {
+                armPending = false;
+                LOG("[CTRL] ARM abgebrochen (Timeout)");
+                bt.sendLine("[CTRL] ARM abgebrochen (Timeout)");
+            }
         }
         break;
 
     case KeyEvent::KEY_S:
         disarm();
+        bt.sendLine("[CTRL] DISARM");
         break;
 
     case KeyEvent::KEY_R:
         if (!armed)
-        { // ← nur wenn NICHT armed!
+        {
             baro.calibrate();
             pidHeight.reset();
+            bt.sendLine("[CTRL] Barometer rekalibriert");
         }
         else
         {
             LOG("[CTRL] Rekalibrierung nur im DISARM Modus!");
+            bt.sendLine("[CTRL] Rekalibrierung nur im DISARM Modus!");
         }
         break;
 
     case KeyEvent::KEY_H:
         printHelp();
+        bt.sendLine("[CTRL] a=ARM s=DISARM r=Baro h=Hilfe l=Log +/-=Hoehe");
+        break;
+
+    case KeyEvent::KEY_L:
+        statusLogEnabled = !statusLogEnabled;
+        LOG_FMT("[CTRL] Statusausgabe: %s", statusLogEnabled ? "EIN" : "AUS");
+        bt.sendLine(statusLogEnabled ? "[CTRL] Statusausgabe: EIN" : "[CTRL] Statusausgabe: AUS");
         break;
 
     case KeyEvent::NONE:
@@ -546,27 +588,23 @@ void loop()
     {
         lastPidMs = millis();
 
-        // Liftoff-Erkennung: Integral erst aktiv wenn wirklich abgehoben
         bool airborne = ultrasonic.isValid() &&
                         (ultrasonic.getAltitudeCm() > LIFTOFF_HEIGHT_CM);
         pidHeight.enableIntegral(airborne);
         pidRoll.enableIntegral(airborne);
         pidPitch.enableIntegral(airborne);
 
-        // Hoehenregelung
         float currentHeight = ultrasonic.isValid() ? ultrasonic.getAltitudeCm() : baro.getAltitudeCm();
         float throttle = pidHeight.compute(targetHeightCm, currentHeight);
 
-        // Lageregelung
-        float rollCorr = pidRoll.compute(TARGET_ROLL_DEG, imu.getRoll());
+        float rollCorr  = pidRoll.compute(TARGET_ROLL_DEG, imu.getRoll());
         float pitchCorr = pidPitch.compute(TARGET_PITCH_DEG, imu.getPitch());
 
-        // Alles kombinieren
         motors.mix((uint16_t)throttle, rollCorr, pitchCorr, 0.0f);
     }
 
     // Statusausgabe alle 500ms
-    if (millis() - lastPrintMs >= 500)
+    if (statusLogEnabled && (millis() - lastPrintMs >= 500))
     {
         lastPrintMs = millis();
         LOG_FMT("[CTRL] Ziel: %.1f cm | Ist: %.1f cm | Throttle: %.0f us | Armed: %s | Bat: %.2fV | Druck: %.2f hPa",

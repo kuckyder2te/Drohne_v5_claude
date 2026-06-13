@@ -74,9 +74,10 @@ float PIDController::compute(float setpoint, float measured)
 
 void PIDController::reset()
 {
-    _integral = 0.0f;
-    _lastError = 0.0f;
-    _lastTime = millis() / 1000.0f;
+    _integral     = 0.0f;
+    _lastError    = 0.0f;
+    _lastTime     = millis() / 1000.0f;
+    _lastThrottle = _useOffset ? (float)ESC_MIN_US : 0.0f;
     LOG("[PID] Reset");
 }
 

@@ -167,21 +167,47 @@ build_flags =
 | 8d | Platinen-Design in KiCad |
 | 8e | Schwebeflug-Test |
 | Phase 2 | NRF24 Radio — Fernsteuerung |
-| Phase 3 | MPU9250 auf SPI umstellen |
+| Phase 3 | Yaw-Stabilisierung — Magnetometer + Gyro-Integration |
 
 ---
 
 ## Bluetooth-Befehle (HC-06)
 
+### Steuerung
 | Befehl | Funktion |
 |--------|----------|
-| `P=1.5` | Kp setzen |
-| `I=0.05` | Ki setzen |
-| `D=0.2` | Kd setzen |
-| `?` | Aktuelle PID-Werte abfragen |
-| `a` | ARM |
+| `a` | ARM (2× drücken innerhalb 3s) |
 | `s` | DISARM (sofort!) |
-| `r` | Rekalibrierung |
+| `r` | Barometer rekalibrieren |
+| `l` | Statusausgabe ein/aus |
+| `h` | Hilfe anzeigen |
+| `+` | Zielhöhe +10 cm |
+| `-` | Zielhöhe -10 cm |
+
+### PID-Tuning (Höhe)
+| Befehl | Funktion |
+|--------|----------|
+| `P=1.5` | Höhe Kp setzen |
+| `I=0.05` | Höhe Ki setzen |
+| `D=0.2` | Höhe Kd setzen |
+
+### PID-Tuning (Roll/Pitch)
+| Befehl | Funktion |
+|--------|----------|
+| `RP=0.5` | Roll Kp setzen |
+| `RI=0.0` | Roll Ki setzen |
+| `RD=0.0` | Roll Kd setzen |
+| `PP=0.5` | Pitch Kp setzen |
+| `PI=0.0` | Pitch Ki setzen |
+| `PD=0.0` | Pitch Kd setzen |
+
+### Speichern & Abfragen
+| Befehl | Funktion |
+|--------|----------|
+| `?` | Aktuelle PID-Werte abfragen |
+
+> **Hinweis:** `S` (Save) und `R` (Reset PID) sind aktuell nicht per BT nutzbar —
+> Einzelbuchstabe `s` = DISARM, `r` = Rekalibrierung. Fix steht aus.
 
 ---
 
@@ -203,6 +229,37 @@ for (int i = 0; i < 9; i++) {
 ```
 **Ergebnis:** 34+ Minuten stabil getestet ✅
 
+### MPU9250 antwortet nicht — WHO_AM_I: 0xFF
+
+**Symptom:** `[IMU] WHO_AM_I: 0xFF` → `FEHLER: IMU!` — I2C-Bus selbst funktioniert (Barometer 0x77 antwortet).  
+**Bedeutung:** 0xFF = kein ACK vom Chip — Gerät physisch nicht erreichbar.
+
+**Diagnoseergebnis (2026-06-11):**  
+I2C-Scan zeigt: `0x76` + `0x77` (beide Barometer-Bereich) — kein 0x68/0x69.  
+→ MPU9250 ist **nicht auf dem Bus**. Chip defekt oder nicht verbunden.  
+Hinweis: 0x76 = MS5611 auf Alternativadresse (CSB=GND) oder zweiter Drucksensor (z.B. BMP280).
+
+**Schnelldiagnose:**
+1. Multimeter: 3,3 V zwischen VCC und GND des IMU-Boards?
+2. Durchgangsprüfung: SDA→GPIO4, SCL→GPIO5 (Widerstand < 5 Ω?)
+3. I2C-Scan (`TEST_I2C_SCAN`): Erscheint 0x68 oder 0x69?
+4. Anderes MPU9250-Board anschließen → reagiert es?
+
+**Häufige Ursachen (Reihenfolge nach Wahrscheinlichkeit):**
+
+| Ursache | Hinweis |
+|---------|---------|
+| ESD-Schaden | MPU9250 extrem empfindlich — kurzes Anfassen ohne Erdung reicht |
+| Kalte Lötstelle | Tritt oft nach Erschütterung auf, besonders Cheap-Boards |
+| VCC-Pin lose | Breadboard-Kontakt geprüft? |
+| Chip-Defekt | Günstige GY-91/GY-6500-Boards mit Fake-Chips fallen plötzlich aus |
+
+**Softwarereaktion:** ARM wird verweigert wenn `!imu.isReady()` — keine Motorreaktion.  
+**Adressvarianten:** MPU9250 → 0x68 (AD0=GND) oder 0x69 (AD0=VCC). WHO_AM_I akzeptiert: 0x71, 0x73, 0x70.  
+**Anderen Chip-Typ?** ICM-20689 (0x98), MPU-6050 (0x68, WHO_AM_I=0x68) → Prüfung in `IMU.cpp:57` erweitern.
+
+---
+
 ### Wire.begin() Konflikt
 **Problem:** IMU und Barometer rufen beide `Wire.begin()` auf.  
 **Lösung:** In `IMU::begin()` kein `Wire.begin()` — Barometer initialisiert den Bus zuerst. Im `TEST_IMU` Modus explizit in `setup()` aufrufen.
@@ -223,6 +280,65 @@ for (int i = 0; i < 9; i++) {
 
 ---
 
+### ESD-Schutz & Komponentenhandhabung
+
+**Besonders gefährdete Bauteile:**
+
+| Komponente | Empfindlichkeit |
+|---|---|
+| RP2040 (Pico) | Sehr hoch — CMOS-Prozessor |
+| MPU9250 | Hoch — MEMS-Struktur |
+| MS5611 | Hoch — Drucksensor-Membran |
+| MOSFETs in ESCs | Mittel-hoch |
+
+**Maßnahmen (Priorität):**
+1. **Antistatik-Armband** beim Arbeiten tragen (bestellt ✅)
+2. Antistatik-Arbeitsmatte (~10–15 €) empfohlen
+3. Spare-Platinen in **antistatischen Tüten** lagern
+4. Vor dem Anfassen: kurz geerdetes Metallteil berühren (Heizung, PC-Gehäuse)
+5. **USB-Kabel ziehen** bevor am Board gearbeitet wird
+6. Lötreihenfolge: zuerst GND, zuletzt VCC
+
+**Erfahrung aus diesem Projekt:**  
+Drei MPU9250-Boards durch ESD zerstört — der 4. Chip (2026-06-12) war OK nachdem beide Sensoren
+(0x68 + 0x77) im I2C-Scan wieder erschienen.  
+→ GY-91 (MPU9250 + BMP280) als Alternativboard geprüft, aber MS5611 bleibt bevorzugt (höhere Barometergenauigkeit).
+
+---
+
+### Ein-/Ausschalten — Reihenfolge & Hinweise
+
+**Einschalten:**
+1. Drohne **ruhig hinlegen** — IMU kalibriert 100 Gyro-Samples beim Start
+2. **Akku anschließen** → ESCs piepen (Initialisierung abwarten)
+3. **~30 s warten** — Barometer Warmup; erst dann `a` (ARM)
+4. USB optional danach für Serial-Monitor
+
+**Ausschalten:**
+1. **`s` drücken** (DISARM) — Motoren auf Minimum
+2. Dann erst Akku trennen
+3. Nie unter Last trennen — Lichtbogen schadet Kontakten und ESCs
+
+**ESD beim Stecken:**
+- Stecker immer am Gehäuse anfassen, nie an Pins
+- XT60-Stecker zügig verbinden (langsames Stecken → Lichtbogen)
+- **Anti-Spark-Widerstand** am XT60 empfehlenswert (~2 €)
+- I2C-Kabel (MPU9250, MS5611) **niemals** im laufenden Betrieb stecken → Chip-Schaden
+
+**LiPo 3S Spannungsgrenzen:**
+
+| Spannung | Zustand |
+|---|---|
+| 12,6 V | Voll geladen |
+| 11,1 V | Nennspannung |
+| 10,5 V | Warnung (1 Beep) — landen! |
+| 10,0 V | Kritisch (3 Beeps) — sofort aus! |
+| < 9,9 V | Zellschaden dauerhaft |
+
+> Warnschwellen implementiert in `src/sensor/Battery.cpp`
+
+---
+
 ## Nächster Schritt
 
 Schwebeflug-Vorbereitung:
@@ -232,3 +348,20 @@ Schwebeflug-Vorbereitung:
 4. `a` → ARM (ohne Propeller zuerst!)
 5. Board kippen → Motorwerte prüfen
 6. Wenn OK → Propeller montieren → erster Flugtest
+
+
+---
+
+## Flugversuch-Parameter
+
+### Versuch 1 (2026-06-10)
+**PID-Werte:**
+| Achse  | Kp     | Ki     | Kd     |
+|--------|--------|--------|--------|
+| Höhe   | 2.0000 | 0.0500 | 0.5000 |
+| Roll   | 0.5000 | —      | —      |
+| Pitch  | 0.5000 | —      | —      |
+
+**Ergebnis:** ...
+**Änderungen für V2:** ...
+

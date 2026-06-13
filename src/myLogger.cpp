@@ -1,5 +1,5 @@
 #include "myLogger.h"
-#include "comm/BluetoothConfig.h"
+#include "comm/BluetoothComm.h"
 
 extern HardwareSerial* DebugSerial;
 
@@ -8,6 +8,6 @@ void dlog(const String& msg) {
     Serial.println(msg);
 #endif
 #ifdef _BT_LOG
-    Serial1.println(msg);  // BT_UART = Serial1
+    BluetoothComm::println(msg);  // BT_UART = Serial1
 #endif
 }
