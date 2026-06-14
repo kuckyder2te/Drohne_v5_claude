@@ -23,7 +23,7 @@ BluetoothComm bt;
 Settings settings;
 IMU imu;
 
-// ── Zustandsvariablen ──────────────────────────────────────
+// -- Zustandsvariablen --------------------------------------
 float targetHeightCm = 0.0f;
 bool armed = false;
 bool statusLogEnabled = false;
@@ -32,22 +32,22 @@ uint32_t armPendingMs = 0;
 uint32_t lastPidMs = 0;
 uint32_t lastPrintMs = 0;
 
-// ── Test-Modi ──────────────────────────────────────────────
+// -- Test-Modi ----------------------------------------------
 #ifdef TEST_MOTORS
 uint16_t currentThrottle = ESC_MIN_US;
 void printMotorHelp()
 {
-    LOG("─────────────────────────────────────────");
+    LOG("-----------------------------------------");
     LOG(" MOTORTEST: + - s h");
     LOG(" c = Kalibrierung: LiPo ZUERST trennen");
     LOG(" k = MAX senden (dann LiPo anstecken)");
     LOG(" m = MIN senden (Kalibrierung fertig)");
-    LOG("─────────────────────────────────────────");
+    LOG("-----------------------------------------");
 }
 #endif
 
 
-// ── Hilfsfunktionen ────────────────────────────────────────
+// -- Hilfsfunktionen ----------------------------------------
 void i2cScan()
 {
     LOG("[I2C] Scanne Bus...");
@@ -68,12 +68,12 @@ void i2cScan()
 
 void printHelp()
 {
-    LOG("────────────────────────────────────");
+    LOG("------------------------------------");
     LOG(" a = ARM    s = DISARM");
     LOG(" Pfeil hoch/runter = Hoehe");
     LOG(" r = Baro   l = Log   h = Hilfe");
     LOG(" PID: P=x.x  I=x.x  D=x.x");
-    LOG("────────────────────────────────────");
+    LOG("------------------------------------");
 }
 
 void disarm()
@@ -84,10 +84,10 @@ void disarm()
     pidHeight.reset();
     pidRoll.reset();
     pidPitch.reset();
-    LOG("[CTRL] DISARM — Motoren gestoppt");
+    LOG("[CTRL] DISARM - Motoren gestoppt");
 }
 
-// ── USB Serial Eingabe ─────────────────────────────────────
+// -- USB Serial Eingabe -------------------------------------
 static uint8_t  _escSt  = 0;
 static String   _serBuf = "";
 static String   _serCmd = "";
@@ -130,7 +130,7 @@ KeyEvent getSerialKey() {
     return KeyEvent::NONE;
 }
 
-// ── Setup ──────────────────────────────────────────────────
+// -- Setup --------------------------------------------------
 void setup()
 {
     Serial.begin(115200);
@@ -245,7 +245,7 @@ void setup()
     }
 
     printHelp();
-    LOG("[CTRL] Bereit — 'a' zum Armen");
+    LOG("[CTRL] Bereit - 'a' zum Armen");
 
 #endif // TEST_ULTRASONIC
 #endif // TEST_I2C_SCAN
@@ -256,12 +256,12 @@ void setup()
 #endif // TEST_MOTORS
 }
 
-// ── Loop ───────────────────────────────────────────────────
+// -- Loop ---------------------------------------------------
 void loop()
 {
     battery.update();
 
-// ── TEST_ULTRASONIC ────────────────────────────────────
+// -- TEST_ULTRASONIC ------------------------------------
 #ifdef TEST_ULTRASONIC
     ultrasonic.update();
     static uint32_t lastUltra = 0;
@@ -279,7 +279,7 @@ void loop()
     }
 #endif
 
-    // ── TEST_IMU ──────────────────────────────────────────
+    // -- TEST_IMU ------------------------------------------
 #ifdef TEST_IMU
     imu.update();
     static uint32_t lastIMU = 0;
@@ -291,7 +291,7 @@ void loop()
     }
 #endif
 
-    // ── TEST_MOTORS ────────────────────────────────────────
+    // -- TEST_MOTORS ----------------------------------------
 #ifdef TEST_MOTORS
 
     static uint32_t lastBat = 0;
@@ -337,14 +337,14 @@ void loop()
             case 'c':
             case 'C':
                 LOG("[ESC] SCHRITT 1: Jetzt LiPo TRENNEN!");
-                LOG("[ESC] Dann 'k' druecken — Pico sendet danach MAX (2000us)");
+                LOG("[ESC] Dann 'k' druecken - Pico sendet danach MAX (2000us)");
                 LOG("[ESC] Erst nach 'k': LiPo wieder anstecken");
                 currentThrottle = ESC_MIN_US;
                 motors.stop();
                 break;
             case 'k':
             case 'K':
-                LOG("[ESC] SCHRITT 2: Sende MAX (2000us) — jetzt LiPo anstecken!");
+                LOG("[ESC] SCHRITT 2: Sende MAX (2000us) - jetzt LiPo anstecken!");
                 currentThrottle = ESC_MAX_US;
                 motors.setThrottle(currentThrottle);
                 LOG("[ESC] Warte auf ESC-Piepstoene, dann 'm' druecken");
@@ -425,7 +425,7 @@ void loop()
     }
 #endif
 
-    // ── TEST_BAROMETER ─────────────────────────────────────
+    // -- TEST_BAROMETER -------------------------------------
 #ifdef TEST_BAROMETER
     baro.update();
     static uint32_t lastBaro = 0;
@@ -440,7 +440,7 @@ void loop()
     LOG_FMT("[BAT] Spannung: %.2fV", battery.getVoltage());
 #endif
 
-    // ── TEST_KEYBOARD ──────────────────────────────────────
+    // -- TEST_KEYBOARD --------------------------------------
 #ifdef TEST_KEYBOARD
     baro.update();
     KeyEvent key = bt.getKey();
@@ -462,7 +462,7 @@ void loop()
         printHelp();
         break;
     case KeyEvent::KEY_A:
-        LOG("[KEY] ARM — nur im Normalbetrieb");
+        LOG("[KEY] ARM - nur im Normalbetrieb");
         break;
     case KeyEvent::NONE:
         break;
@@ -475,7 +475,7 @@ void loop()
     }
 #endif
 
-    // ── NORMALBETRIEB ──────────────────────────────────────
+    // -- NORMALBETRIEB --------------------------------------
 #ifndef TEST_MOTORS
 #ifndef TEST_MOTORS_SINGLE
 #ifndef TEST_BAROMETER
@@ -500,14 +500,14 @@ void loop()
     {
         if (!imu.isReady())
         {
-            LOG("[SAFETY] IMU Fehler — DISARM!");
+            LOG("[SAFETY] IMU Fehler - DISARM!");
             disarm();
         }
         static float lastHeight = 0;
         float h = baro.getAltitudeCm();
         if (abs(h - lastHeight) > 500.0f)
         {
-            LOG("[SAFETY] Hoehensprung — DISARM!");
+            LOG("[SAFETY] Hoehensprung - DISARM!");
             disarm();
         }
         lastHeight = h;

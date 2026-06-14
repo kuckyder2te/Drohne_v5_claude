@@ -72,7 +72,7 @@ uint8_t IMU::_readReg(uint8_t reg) {
 // ── Kalibrierung ──────────────────────────────────────────
 
 void IMU::calibrate() {
-    LOG("[IMU] Rekalibrierung — bitte ruhig halten...");
+    LOG("[IMU] Rekalibrierung - bitte ruhig halten...");
     // Gyro Bias über 100 Messungen mitteln
     float bx = 0, by = 0, bz = 0;
     for (int i = 0; i < 100; i++) {
@@ -108,7 +108,7 @@ bool IMU::update() {
     if (err != 0) {
         static uint32_t lastErrMs = 0;
         if (millis() - lastErrMs > 1000) {
-            LOG_FMT("[IMU] Bus Fehler: %d — Recovery", err);
+            LOG_FMT("[IMU] Bus Fehler: %d - Recovery", err);
             lastErrMs = millis();
         }
 
@@ -116,7 +116,7 @@ bool IMU::update() {
     Wire.end();
     delay(20);
 
-    // Manuelle Clock-Pulse — befreit haengenden Bus
+    // Manuelle Clock-Pulse - befreit haengenden Bus
     pinMode(PIN_SDA, OUTPUT);
     pinMode(PIN_SCL, OUTPUT);
     digitalWrite(PIN_SDA, HIGH);

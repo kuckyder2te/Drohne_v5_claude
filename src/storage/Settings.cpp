@@ -30,10 +30,10 @@ void Settings::save(float kp, float ki, float kd) {
 }
 
 bool Settings::load(float& kp, float& ki, float& kd) {
-    // Prüfen ob gültige Daten vorhanden
+    // Pruefen ob gueltige Daten vorhanden
     uint8_t marker = EEPROM.read(EEPROM_VALID_ADDR);
     if (marker != EEPROM_VALID_VAL) {
-        LOG("[EEPROM] Keine gültigen Daten — Standardwerte");
+        LOG("[EEPROM] Keine gueltigen Daten - Standardwerte");
         return false;
     }
     kp = _readFloat(EEPROM_ADDR_KP);
@@ -49,5 +49,5 @@ bool Settings::load(float& kp, float& ki, float& kd) {
 void Settings::reset() {
     EEPROM.write(EEPROM_VALID_ADDR, 0x00);
     EEPROM.commit();
-    LOG("[EEPROM] Zurückgesetzt");
+    LOG("[EEPROM] Zurueckgesetzt");
 }
