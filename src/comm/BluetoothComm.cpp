@@ -3,9 +3,11 @@
 #include "config.h"
 #include "pins.h"
 
-// Echo-Fenster nach dem Senden verlängern (HC-05 spiegelt TX zurück an RX)
+// Echo-Fenster nach dem Senden verlängern (HC-06 spiegelt TX zurück an RX)
+// Max. 300 ms damit bei I2C-Fehlern kein Dauer-Block entsteht
 static void _extendEcho(uint32_t &echoUntilMs, uint16_t msgLen) {
-    uint32_t windowMs = (msgLen * 2u) + 30u; // 9600 Baud: ~1ms/Byte + Puffer
+    uint32_t windowMs = (msgLen * 2u) + 30u;
+    if (windowMs > 300u) windowMs = 300u;
     uint32_t deadline = millis() + windowMs;
     if (deadline > echoUntilMs) echoUntilMs = deadline;
 }
@@ -35,22 +37,29 @@ KeyEvent BluetoothComm::getKey() {
     while (BT_UART.available()) {
         uint8_t c = BT_UART.read();
 
-        if (millis() < _echoUntilMs) continue; // Echo unterdrücken
-
-        if (c == '\n' || c == '\r') {
-            KeyEvent ev = _flushBuffer();
-            if (ev != KeyEvent::NONE) return ev;
-        } else {
+        if (c == '\r' || c == '\n') {
+            if (_buffer.length() == 1) {
+                char ch = toupper(_buffer[0]);
+                _buffer = "";
+                switch (ch) {
+                    case 'A': return KeyEvent::KEY_A;
+                    case 'S': return KeyEvent::KEY_S;
+                    case 'H': return KeyEvent::KEY_H;
+                    case 'R': return KeyEvent::KEY_R;
+                    case 'L': return KeyEvent::KEY_L;
+                    case '+': return KeyEvent::ARROW_UP;
+                    case '-': return KeyEvent::ARROW_DOWN;
+                    default:  _command = String(ch); break;
+                }
+            } else if (_buffer.length() > 1) {
+                _command = _buffer;
+                _buffer = "";
+            }
+            // length == 0: zweites Byte von \r\n, ignorieren
+        } else if (c >= 0x20) {
             _buffer += (char)c;
-            _lastCharMs = millis();
             if (_buffer.length() > 100) _buffer = "";
         }
-    }
-
-    // Kein Newline nach 150 ms → trotzdem auswerten
-    if (_buffer.length() > 0 && (millis() - _lastCharMs >= 150)) {
-        KeyEvent ev = _flushBuffer();
-        if (ev != KeyEvent::NONE) return ev;
     }
 
     return KeyEvent::NONE;
@@ -60,30 +69,6 @@ String BluetoothComm::getCommand() {
     return _command;
 }
 
-KeyEvent BluetoothComm::_flushBuffer() {
-    if (_buffer.length() == 0) return KeyEvent::NONE;
-
-    if (_buffer.length() == 1) {
-        char ch = toupper(_buffer[0]);
-        _buffer = "";
-        _lastCharMs = 0;
-        switch (ch) {
-            case 'A': return KeyEvent::KEY_A;
-            case 'S': return KeyEvent::KEY_S;
-            case 'H': return KeyEvent::KEY_H;
-            case 'R': return KeyEvent::KEY_R;
-            case 'L': return KeyEvent::KEY_L;
-            case '+': return KeyEvent::ARROW_UP;
-            case '-': return KeyEvent::ARROW_DOWN;
-            default:  return KeyEvent::NONE;
-        }
-    }
-
-    _command = _buffer;
-    _buffer = "";
-    _lastCharMs = 0;
-    return KeyEvent::NONE;
-}
 
 void BluetoothComm::processCommand(const String &cmd,
                                    PIDController &pidHeight,

@@ -5,7 +5,6 @@
 #include "control/MotorMixer.h"
 #include "control/PIDController.h"
 #include "sensor/Barometer.h"
-#include "comm/SerialInput.h"
 #include "comm/BluetoothComm.h"
 #include "storage/Settings.h"
 #include "sensor/IMU.h"
@@ -15,7 +14,6 @@
 MotorMixer motors;
 Barometer baro;
 Battery battery;
-SerialInput serialInput;
 Ultrasonic ultrasonic;
 PIDController pidHeight(PID_KP_HEIGHT, PID_KI_HEIGHT, PID_KD_HEIGHT, true); // mit Offset
 PIDController pidRoll(PID_KP_ROLL, PID_KI_ROLL, PID_KD_ROLL, false);        // ohne Offset
@@ -28,7 +26,7 @@ IMU imu;
 // ── Zustandsvariablen ──────────────────────────────────────
 float targetHeightCm = 0.0f;
 bool armed = false;
-bool statusLogEnabled = true;
+bool statusLogEnabled = false;
 bool armPending = false;
 uint32_t armPendingMs = 0;
 uint32_t lastPidMs = 0;
@@ -71,13 +69,10 @@ void i2cScan()
 void printHelp()
 {
     LOG("────────────────────────────────────");
-    LOG(" Pfeil hoch   = Zielhoehe +10 cm");
-    LOG(" Pfeil runter = Zielhoehe -10 cm");
-    LOG(" a = ARM (Motoren ein)");
-    LOG(" s = DISARM (Motoren aus)");
-    LOG(" r = Barometer rekalibrieren");
-    LOG(" l = Statusausgabe ein/aus");
-    LOG(" h = Hilfe");
+    LOG(" a = ARM    s = DISARM");
+    LOG(" Pfeil hoch/runter = Hoehe");
+    LOG(" r = Baro   l = Log   h = Hilfe");
+    LOG(" PID: P=x.x  I=x.x  D=x.x");
     LOG("────────────────────────────────────");
 }
 
@@ -92,6 +87,49 @@ void disarm()
     LOG("[CTRL] DISARM — Motoren gestoppt");
 }
 
+// ── USB Serial Eingabe ─────────────────────────────────────
+static uint8_t  _escSt  = 0;
+static String   _serBuf = "";
+static String   _serCmd = "";
+
+KeyEvent getSerialKey() {
+    _serCmd = "";
+    while (Serial.available()) {
+        uint8_t c = Serial.read();
+        // ANSI Escape: ESC [ A = Pfeil hoch, ESC [ B = Pfeil runter
+        if (_escSt == 0 && c == 0x1B) { _escSt = 1; continue; }
+        if (_escSt == 1) { _escSt = (c == '[') ? 2 : 0; continue; }
+        if (_escSt == 2) {
+            _escSt = 0;
+            if (c == 'A') return KeyEvent::ARROW_UP;
+            if (c == 'B') return KeyEvent::ARROW_DOWN;
+            continue;
+        }
+        // Newline beendet Mehrzeichen-Befehl (z.B. P=2.0)
+        if (c == '\r' || c == '\n') {
+            if (_serBuf.length() > 0) { _serCmd = _serBuf; _serBuf = ""; }
+            continue;
+        }
+        if (c < 0x20) continue;
+        // Bekannte Einzel-Tasten sofort auslösen
+        if (_serBuf.length() == 0) {
+            char ch = toupper(c);
+            switch (ch) {
+                case 'A': return KeyEvent::KEY_A;
+                case 'S': return KeyEvent::KEY_S;
+                case 'H': return KeyEvent::KEY_H;
+                case 'R': return KeyEvent::KEY_R;
+                case 'L': return KeyEvent::KEY_L;
+                case '+': return KeyEvent::ARROW_UP;
+                case '-': return KeyEvent::ARROW_DOWN;
+            }
+        }
+        _serBuf += (char)c;
+        if (_serBuf.length() > 50) _serBuf = "";
+    }
+    return KeyEvent::NONE;
+}
+
 // ── Setup ──────────────────────────────────────────────────
 void setup()
 {
@@ -100,8 +138,6 @@ void setup()
 
     battery.begin();
     ultrasonic.begin();
-
-    bt.begin();
 
     pidHeight.begin();
     pidRoll.begin();
@@ -165,7 +201,6 @@ void setup()
         while (true)
             delay(1000);
     }
-    serialInput.begin();
     printHelp();
 #endif
 
@@ -192,7 +227,6 @@ void setup()
     ultrasonic.begin();
     motors.begin();
     pidHeight.begin();
-    serialInput.begin();
 
     settings.begin();
     float kp, ki, kd;
@@ -275,9 +309,7 @@ void loop()
     }
 
     char cmd = 0;
-    if (Serial.available())
-        cmd = Serial.read();
-    else if (BT_UART.available())
+    if (BT_UART.available())
         cmd = BT_UART.read();
 
     if (cmd != 0)
@@ -340,8 +372,7 @@ void loop()
     }
 
     char cmd = 0;
-    if (Serial.available()) cmd = Serial.read();
-    else if (BT_UART.available()) cmd = BT_UART.read();
+    if (BT_UART.available()) cmd = BT_UART.read();
 
     if (cmd != 0) {
         switch (cmd) {
@@ -412,7 +443,7 @@ void loop()
     // ── TEST_KEYBOARD ──────────────────────────────────────
 #ifdef TEST_KEYBOARD
     baro.update();
-    KeyEvent key = serialInput.getKey();
+    KeyEvent key = bt.getKey();
     switch (key)
     {
     case KeyEvent::ARROW_UP:
@@ -482,15 +513,13 @@ void loop()
         lastHeight = h;
     }
 
-    // Eingabe: USB zuerst, dann BT
-    KeyEvent key = serialInput.getKey();
-    if (key == KeyEvent::NONE) key = bt.getKey();
+    KeyEvent key = getSerialKey();
 
-    // BT Mehrzeichen-Befehle (PID-Tuning)
-    String btCmd = bt.getCommand();
-    if (btCmd.length() > 0)
+    // Mehrzeichen-Befehle via Serial (PID-Tuning: P=x.x etc.)
+    if (_serCmd.length() > 0)
     {
-        bt.processCommand(btCmd, pidHeight, pidRoll, pidPitch, settings);
+        bt.processCommand(_serCmd, pidHeight, pidRoll, pidPitch, settings);
+        _serCmd = "";
     }
 
     switch (key)
@@ -498,13 +527,11 @@ void loop()
     case KeyEvent::ARROW_UP:
         targetHeightCm = constrain(targetHeightCm + 10.0f, THROTTLE_MIN_CM, MAX_HEIGHT_CM);
         LOG_FMT("[CTRL] Zielhoehe: %.1f cm", targetHeightCm);
-        { char buf[32]; snprintf(buf, sizeof(buf), "[CTRL] Zielhoehe: %.1f cm", targetHeightCm); bt.sendLine(buf); }
         break;
 
     case KeyEvent::ARROW_DOWN:
         targetHeightCm = constrain(targetHeightCm - 10.0f, THROTTLE_MIN_CM, MAX_HEIGHT_CM);
         LOG_FMT("[CTRL] Zielhoehe: %.1f cm", targetHeightCm);
-        { char buf[32]; snprintf(buf, sizeof(buf), "[CTRL] Zielhoehe: %.1f cm", targetHeightCm); bt.sendLine(buf); }
         break;
 
     case KeyEvent::KEY_A:
@@ -515,7 +542,6 @@ void loop()
                 armPending   = true;
                 armPendingMs = millis();
                 LOG("[CTRL] ARM? Nochmal 'a' druecken (3s)");
-                bt.sendLine("[CTRL] ARM? Nochmal 'a' druecken (3s)");
             }
             else if (millis() - armPendingMs <= 3000)
             {
@@ -523,7 +549,6 @@ void loop()
                 if (!imu.isReady())
                 {
                     LOG("[CTRL] ARM verweigert - IMU nicht bereit!");
-                    bt.sendLine("[CTRL] ARM verweigert - IMU nicht bereit!");
                 }
                 else
                 {
@@ -537,21 +562,18 @@ void loop()
                     pidRoll.reset();
                     pidPitch.reset();
                     LOG("[CTRL] ARM - Ziel: 20 cm");
-                    bt.sendLine("[CTRL] ARM - Ziel: 20 cm");
                 }
             }
             else
             {
                 armPending = false;
                 LOG("[CTRL] ARM abgebrochen (Timeout)");
-                bt.sendLine("[CTRL] ARM abgebrochen (Timeout)");
             }
         }
         break;
 
     case KeyEvent::KEY_S:
         disarm();
-        bt.sendLine("[CTRL] DISARM");
         break;
 
     case KeyEvent::KEY_R:
@@ -559,24 +581,21 @@ void loop()
         {
             baro.calibrate();
             pidHeight.reset();
-            bt.sendLine("[CTRL] Barometer rekalibriert");
+            LOG("[CTRL] Barometer rekalibriert");
         }
         else
         {
             LOG("[CTRL] Rekalibrierung nur im DISARM Modus!");
-            bt.sendLine("[CTRL] Rekalibrierung nur im DISARM Modus!");
         }
         break;
 
     case KeyEvent::KEY_H:
         printHelp();
-        bt.sendLine("[CTRL] a=ARM s=DISARM r=Baro h=Hilfe l=Log +/-=Hoehe");
         break;
 
     case KeyEvent::KEY_L:
         statusLogEnabled = !statusLogEnabled;
         LOG_FMT("[CTRL] Statusausgabe: %s", statusLogEnabled ? "EIN" : "AUS");
-        bt.sendLine(statusLogEnabled ? "[CTRL] Statusausgabe: EIN" : "[CTRL] Statusausgabe: AUS");
         break;
 
     case KeyEvent::NONE:

@@ -105,10 +105,12 @@ bool IMU::update() {
     Wire.write((uint8_t)0x3B);
     uint8_t err = Wire.endTransmission(false);
 
-    // Bus-Fehler → Recovery
- // Bus-Fehler → Recovery
-if (err != 0) {
-    LOG_FMT("[IMU] Bus Fehler: %d — Recovery", err);
+    if (err != 0) {
+        static uint32_t lastErrMs = 0;
+        if (millis() - lastErrMs > 1000) {
+            LOG_FMT("[IMU] Bus Fehler: %d — Recovery", err);
+            lastErrMs = millis();
+        }
 
     // Wire komplett beenden
     Wire.end();

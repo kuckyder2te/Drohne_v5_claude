@@ -1,9 +1,19 @@
 #pragma once
 
 #include <Arduino.h>
-#include "comm/SerialInput.h"
 #include "control/PIDController.h"
 #include "storage/Settings.h"
+
+enum class KeyEvent {
+    NONE,
+    ARROW_UP,
+    ARROW_DOWN,
+    KEY_A,
+    KEY_S,
+    KEY_H,
+    KEY_R,
+    KEY_L,
+};
 
 class BluetoothComm {
 public:
@@ -24,8 +34,6 @@ public:
 private:
     String   _buffer;
     String   _command;
-    uint32_t _lastCharMs  = 0;
     uint32_t _echoUntilMs = 0;
-
-    KeyEvent _flushBuffer();
+    uint32_t _lastCharMs  = 0;
 };

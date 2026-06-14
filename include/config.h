@@ -1,9 +1,8 @@
 #pragma once
 
 // ── Debug Ausgabe ──────────────────────────────────────────
-#define _SERIAL_LOG // ← USB Serial aktiv
-// #define _BT_LOG  // ← deaktiviert: HC-06 echot TX→RX zurück, füllt BT-Puffer
-                   // beide auskommentieren = kein Log
+#define _SERIAL_LOG
+// #define _BT_LOG
 
 // ── Test-Modi (auskommentieren = deaktiviert) ──────────────
 // #define TEST_MOTORS
