@@ -46,7 +46,6 @@ void printMotorHelp()
 }
 #endif
 
-
 // -- Hilfsfunktionen ----------------------------------------
 void i2cScan()
 {
@@ -69,9 +68,12 @@ void i2cScan()
 void printHelp()
 {
     LOG("------------------------------------");
-    LOG(" a = ARM    s = DISARM");
+    LOG(" a = ARM ");
+    LOG(" s = DISARM");
     LOG(" Pfeil hoch/runter = Hoehe");
-    LOG(" r = Baro   l = Log   h = Hilfe");
+    LOG(" r = Baro ");
+    LOG(" l = Log ");
+    LOG(" h = Hilfe"); 
     LOG(" PID: P=x.x  I=x.x  D=x.x");
     LOG("------------------------------------");
 }
@@ -88,44 +90,73 @@ void disarm()
 }
 
 // -- USB Serial Eingabe -------------------------------------
-static uint8_t  _escSt  = 0;
-static String   _serBuf = "";
-static String   _serCmd = "";
+static uint8_t _escSt = 0;
+static String _serBuf = "";
+static String _serCmd = "";
 
-KeyEvent getSerialKey() {
+KeyEvent getSerialKey()
+{
     _serCmd = "";
-    while (Serial.available()) {
+    while (Serial.available())
+    {
         uint8_t c = Serial.read();
         // ANSI Escape: ESC [ A = Pfeil hoch, ESC [ B = Pfeil runter
-        if (_escSt == 0 && c == 0x1B) { _escSt = 1; continue; }
-        if (_escSt == 1) { _escSt = (c == '[') ? 2 : 0; continue; }
-        if (_escSt == 2) {
+        if (_escSt == 0 && c == 0x1B)
+        {
+            _escSt = 1;
+            continue;
+        }
+        if (_escSt == 1)
+        {
+            _escSt = (c == '[') ? 2 : 0;
+            continue;
+        }
+        if (_escSt == 2)
+        {
             _escSt = 0;
-            if (c == 'A') return KeyEvent::ARROW_UP;
-            if (c == 'B') return KeyEvent::ARROW_DOWN;
+            if (c == 'A')
+                return KeyEvent::ARROW_UP;
+            if (c == 'B')
+                return KeyEvent::ARROW_DOWN;
             continue;
         }
         // Newline beendet Mehrzeichen-Befehl (z.B. P=2.0)
-        if (c == '\r' || c == '\n') {
-            if (_serBuf.length() > 0) { _serCmd = _serBuf; _serBuf = ""; }
+        if (c == '\r' || c == '\n')
+        {
+            if (_serBuf.length() > 0)
+            {
+                _serCmd = _serBuf;
+                _serBuf = "";
+            }
             continue;
         }
-        if (c < 0x20) continue;
+        if (c < 0x20)
+            continue;
         // Bekannte Einzel-Tasten sofort auslösen
-        if (_serBuf.length() == 0) {
+        if (_serBuf.length() == 0)
+        {
             char ch = toupper(c);
-            switch (ch) {
-                case 'A': return KeyEvent::KEY_A;
-                case 'S': return KeyEvent::KEY_S;
-                case 'H': return KeyEvent::KEY_H;
-                case 'R': return KeyEvent::KEY_R;
-                case 'L': return KeyEvent::KEY_L;
-                case '+': return KeyEvent::ARROW_UP;
-                case '-': return KeyEvent::ARROW_DOWN;
+            switch (ch)
+            {
+            case 'A':
+                return KeyEvent::KEY_A;
+            case 'S':
+                return KeyEvent::KEY_S;
+            case 'H':
+                return KeyEvent::KEY_H;
+            case 'R':
+                return KeyEvent::KEY_R;
+            case 'L':
+                return KeyEvent::KEY_L;
+            case '+':
+                return KeyEvent::ARROW_UP;
+            case '-':
+                return KeyEvent::ARROW_DOWN;
             }
         }
         _serBuf += (char)c;
-        if (_serBuf.length() > 50) _serBuf = "";
+        if (_serBuf.length() > 50)
+            _serBuf = "";
     }
     return KeyEvent::NONE;
 }
@@ -135,6 +166,8 @@ void setup()
 {
     Serial.begin(115200);
     delay(2000);
+
+    bt.begin();
 
     battery.begin();
     ultrasonic.begin();
@@ -366,16 +399,20 @@ void loop()
     static uint8_t activeMotor = 0;
 
     static uint32_t lastBatS = 0;
-    if (millis() - lastBatS >= 5000) {
+    if (millis() - lastBatS >= 5000)
+    {
         lastBatS = millis();
         LOG_FMT("[BAT] %.2fV", battery.getVoltage());
     }
 
     char cmd = 0;
-    if (BT_UART.available()) cmd = BT_UART.read();
+    if (BT_UART.available())
+        cmd = BT_UART.read();
 
-    if (cmd != 0) {
-        switch (cmd) {
+    if (cmd != 0)
+    {
+        switch (cmd)
+        {
         case '1':
             activeMotor = 1;
             singleThrottle = ESC_MIN_US;
@@ -401,14 +438,16 @@ void loop()
             LOG("[MOTOR] BL aktiv");
             break;
         case '+':
-            if (activeMotor > 0) {
+            if (activeMotor > 0)
+            {
                 singleThrottle = constrain(singleThrottle + THROTTLE_STEP, ESC_MIN_US, ESC_MAX_US);
                 motors.setSingle(activeMotor, singleThrottle);
                 LOG_FMT("[MOTOR] Throttle: %d us", singleThrottle);
             }
             break;
         case '-':
-            if (activeMotor > 0) {
+            if (activeMotor > 0)
+            {
                 singleThrottle = constrain(singleThrottle - THROTTLE_STEP, ESC_MIN_US, ESC_MAX_US);
                 motors.setSingle(activeMotor, singleThrottle);
                 LOG_FMT("[MOTOR] Throttle: %d us", singleThrottle);
@@ -514,12 +553,20 @@ void loop()
     }
 
     KeyEvent key = getSerialKey();
+    if (key == KeyEvent::NONE)
+        key = bt.getKey();
 
     // Mehrzeichen-Befehle via Serial (PID-Tuning: P=x.x etc.)
     if (_serCmd.length() > 0)
     {
         bt.processCommand(_serCmd, pidHeight, pidRoll, pidPitch, settings);
         _serCmd = "";
+    }
+    // Mehrzeichen-Befehle via BT (P=x.x + Enter)
+    String btCmd = bt.getCommand();
+    if (btCmd.length() > 0)
+    {
+        bt.processCommand(btCmd, pidHeight, pidRoll, pidPitch, settings);
     }
 
     switch (key)
@@ -539,7 +586,7 @@ void loop()
         {
             if (!armPending)
             {
-                armPending   = true;
+                armPending = true;
                 armPendingMs = millis();
                 LOG("[CTRL] ARM? Nochmal 'a' druecken (3s)");
             }
@@ -555,9 +602,9 @@ void loop()
                     LOG("[CTRL] Rekalibrierung vor ARM...");
                     baro.calibrate();
                     delay(500);
-                    armed          = true;
+                    armed = true;
                     targetHeightCm = 20.0f;
-                    lastPidMs      = millis();
+                    lastPidMs = millis();
                     pidHeight.reset();
                     pidRoll.reset();
                     pidPitch.reset();
@@ -616,7 +663,7 @@ void loop()
         float currentHeight = ultrasonic.isValid() ? ultrasonic.getAltitudeCm() : baro.getAltitudeCm();
         float throttle = pidHeight.compute(targetHeightCm, currentHeight);
 
-        float rollCorr  = pidRoll.compute(TARGET_ROLL_DEG, imu.getRoll());
+        float rollCorr = pidRoll.compute(TARGET_ROLL_DEG, imu.getRoll());
         float pitchCorr = pidPitch.compute(TARGET_PITCH_DEG, imu.getPitch());
 
         motors.mix((uint16_t)throttle, rollCorr, pitchCorr, 0.0f);

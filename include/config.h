@@ -2,7 +2,7 @@
 
 // ── Debug Ausgabe ──────────────────────────────────────────
 #define _SERIAL_LOG
-// #define _BT_LOG
+//#define _BT_LOG
 
 // ── Test-Modi (auskommentieren = deaktiviert) ──────────────
 // #define TEST_MOTORS

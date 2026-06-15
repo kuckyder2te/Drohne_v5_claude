@@ -34,6 +34,17 @@ void BluetoothComm::begin() {
 KeyEvent BluetoothComm::getKey() {
     _command = "";
 
+    // TX-Echo unterdrücken: HC-06 spiegelt gesendete Bytes zurück an RX
+    if (millis() < _echoUntilMs) {
+        while (BT_UART.available()) BT_UART.read();
+        return KeyEvent::NONE;
+    }
+
+    // Veraltete Bytes (z.B. HC-06 Init-String "link") nach 500 ms verwerfen
+    if (_buffer.length() > 0 && (millis() - _lastCharMs) > 500) {
+        _buffer = "";
+    }
+
     while (BT_UART.available()) {
         uint8_t c = BT_UART.read();
 
@@ -55,10 +66,25 @@ KeyEvent BluetoothComm::getKey() {
                 _command = _buffer;
                 _buffer = "";
             }
-            // length == 0: zweites Byte von \r\n, ignorieren
         } else if (c >= 0x20) {
-            _buffer += (char)c;
-            if (_buffer.length() > 100) _buffer = "";
+            _lastCharMs = millis();
+            if (_buffer.length() == 0) {
+                // Sofortiger Key ohne Enter — wie USB Serial
+                char ch = toupper(c);
+                switch (ch) {
+                    case 'A': return KeyEvent::KEY_A;
+                    case 'S': return KeyEvent::KEY_S;
+                    case 'H': return KeyEvent::KEY_H;
+                    case 'R': return KeyEvent::KEY_R;
+                    case 'L': return KeyEvent::KEY_L;
+                    case '+': return KeyEvent::ARROW_UP;
+                    case '-': return KeyEvent::ARROW_DOWN;
+                    default:  _buffer += (char)c; break;
+                }
+            } else {
+                _buffer += (char)c;
+                if (_buffer.length() > 100) _buffer = "";
+            }
         }
     }
 
