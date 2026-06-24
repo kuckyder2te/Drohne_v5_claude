@@ -6,6 +6,7 @@
 #include "control/PIDController.h"
 #include "sensor/Barometer.h"
 #include "comm/BluetoothComm.h"
+#include "comm/SerialInput.h"
 #include "storage/Settings.h"
 #include "sensor/IMU.h"
 #include "sensor/Battery.h"
@@ -20,6 +21,7 @@ PIDController pidRoll(PID_KP_ROLL, PID_KI_ROLL, PID_KD_ROLL, false);        // o
 PIDController pidPitch(PID_KP_PITCH, PID_KI_PITCH, PID_KD_PITCH, false);    // ohne Offset
 
 BluetoothComm bt;
+SerialInput serial;
 Settings settings;
 IMU imu;
 
@@ -47,18 +49,65 @@ void printMotorHelp()
 #endif
 
 // -- Hilfsfunktionen ----------------------------------------
+void i2cBusRecovery()
+{
+    Wire.end();             // I2C Peripheral freigeben → Pins als GPIO nutzbar
+    delay(10);
+    pinMode(PIN_SDA, OUTPUT);
+    pinMode(PIN_SCL, OUTPUT);
+    digitalWrite(PIN_SDA, HIGH);
+    for (int i = 0; i < 9; i++)
+    {
+        digitalWrite(PIN_SCL, HIGH); delayMicroseconds(10);
+        digitalWrite(PIN_SCL, LOW);  delayMicroseconds(10);
+    }
+    // STOP-Condition erzeugen
+    digitalWrite(PIN_SDA, LOW);  delayMicroseconds(10);
+    digitalWrite(PIN_SCL, HIGH); delayMicroseconds(10);
+    digitalWrite(PIN_SDA, HIGH); delayMicroseconds(10);
+    delay(20);
+    Wire.setSDA(PIN_SDA);
+    Wire.setSCL(PIN_SCL);
+    Wire.begin();
+    delay(50);
+}
+
 void i2cScan()
 {
+    i2cBusRecovery();
+
+    // SDA-Pegel prüfen: LOW nach Recovery = Hardwareproblem
+    Wire.end();
+    delay(5);
+    pinMode(PIN_SDA, INPUT_PULLUP);
+    delay(5);
+    bool sdaOk = digitalRead(PIN_SDA);
+    Wire.setSDA(PIN_SDA);
+    Wire.setSCL(PIN_SCL);
+    Wire.begin();
+
+    if (!sdaOk)
+    {
+        LOG("[I2C] FEHLER: SDA bleibt LOW nach Recovery!");
+        LOG("[I2C] -> Kurzschluss, defektes Geraet oder fehlendes Pull-up?");
+        LOG("[I2C] -> LiPo + USB trennen, 10s warten, neu starten.");
+        return;
+    }
+
     LOG("[I2C] Scanne Bus...");
     int found = 0;
     for (uint8_t addr = 1; addr < 127; addr++)
     {
+        // Doppelprüfung: endTransmission + ein Byte lesen (echter ACK-Test)
         Wire.beginTransmission(addr);
-        if (Wire.endTransmission() == 0)
-        {
-            LOG_FMT("[I2C] Gefunden: 0x%02X", addr);
-            found++;
-        }
+        if (Wire.endTransmission() != 0) continue;
+
+        Wire.requestFrom((int)addr, 1);
+        if (Wire.available() < 1) continue;
+        Wire.read();
+
+        LOG_FMT("[I2C] Gefunden: 0x%02X", addr);
+        found++;
     }
     if (found == 0)
         LOG("[I2C] Kein Geraet!");
@@ -68,13 +117,15 @@ void i2cScan()
 void printHelp()
 {
     LOG("------------------------------------");
-    LOG(" a = ARM ");
-    LOG(" s = DISARM");
-    LOG(" Pfeil hoch/runter = Hoehe");
-    LOG(" r = Baro ");
-    LOG(" l = Log ");
-    LOG(" h = Hilfe"); 
+    LOG(" a   = ARM (2x bestaetigen)");
+    LOG(" d   = DISARM (sofort)");
+    LOG(" +/- = Hoehe +/-10 cm (sofort)");
+    LOG(" r   = Baro rekalibrieren");
+    LOG(" l   = Statuslog ein/aus");
+    LOG(" h   = Hilfe");
+    LOG(" ?   = PID-Werte anzeigen");
     LOG(" PID: P=x.x  I=x.x  D=x.x");
+    LOG(" SAVE / RESET");
     LOG("------------------------------------");
 }
 
@@ -89,77 +140,6 @@ void disarm()
     LOG("[CTRL] DISARM - Motoren gestoppt");
 }
 
-// -- USB Serial Eingabe -------------------------------------
-static uint8_t _escSt = 0;
-static String _serBuf = "";
-static String _serCmd = "";
-
-KeyEvent getSerialKey()
-{
-    _serCmd = "";
-    while (Serial.available())
-    {
-        uint8_t c = Serial.read();
-        // ANSI Escape: ESC [ A = Pfeil hoch, ESC [ B = Pfeil runter
-        if (_escSt == 0 && c == 0x1B)
-        {
-            _escSt = 1;
-            continue;
-        }
-        if (_escSt == 1)
-        {
-            _escSt = (c == '[') ? 2 : 0;
-            continue;
-        }
-        if (_escSt == 2)
-        {
-            _escSt = 0;
-            if (c == 'A')
-                return KeyEvent::ARROW_UP;
-            if (c == 'B')
-                return KeyEvent::ARROW_DOWN;
-            continue;
-        }
-        // Newline beendet Mehrzeichen-Befehl (z.B. P=2.0)
-        if (c == '\r' || c == '\n')
-        {
-            if (_serBuf.length() > 0)
-            {
-                _serCmd = _serBuf;
-                _serBuf = "";
-            }
-            continue;
-        }
-        if (c < 0x20)
-            continue;
-        // Bekannte Einzel-Tasten sofort auslösen
-        if (_serBuf.length() == 0)
-        {
-            char ch = toupper(c);
-            switch (ch)
-            {
-            case 'A':
-                return KeyEvent::KEY_A;
-            case 'S':
-                return KeyEvent::KEY_S;
-            case 'H':
-                return KeyEvent::KEY_H;
-            case 'R':
-                return KeyEvent::KEY_R;
-            case 'L':
-                return KeyEvent::KEY_L;
-            case '+':
-                return KeyEvent::ARROW_UP;
-            case '-':
-                return KeyEvent::ARROW_DOWN;
-            }
-        }
-        _serBuf += (char)c;
-        if (_serBuf.length() > 50)
-            _serBuf = "";
-    }
-    return KeyEvent::NONE;
-}
 
 // -- Setup --------------------------------------------------
 void setup()
@@ -184,11 +164,7 @@ void setup()
 #endif
 
 #ifdef TEST_I2C_SCAN
-    Wire.setSDA(PIN_SDA);
-    Wire.setSCL(PIN_SCL);
-    Wire.begin();
-    LOG("Wire OK, scanne...");
-    i2cScan();
+    LOG(">> Modus: I2C SCAN TEST (alle 5 s)");
 #endif
 
 #ifdef TEST_IMU
@@ -279,6 +255,7 @@ void setup()
 
     printHelp();
     LOG("[CTRL] Bereit - 'a' zum Armen");
+    bt.flushEcho();
 
 #endif // TEST_ULTRASONIC
 #endif // TEST_I2C_SCAN
@@ -479,6 +456,16 @@ void loop()
     LOG_FMT("[BAT] Spannung: %.2fV", battery.getVoltage());
 #endif
 
+    // -- TEST_I2C_SCAN --------------------------------------
+#ifdef TEST_I2C_SCAN
+    static uint32_t lastI2C = 0;
+    if (millis() - lastI2C >= 5000)
+    {
+        lastI2C = millis();
+        i2cScan();
+    }
+#endif
+
     // -- TEST_KEYBOARD --------------------------------------
 #ifdef TEST_KEYBOARD
     baro.update();
@@ -491,8 +478,8 @@ void loop()
     case KeyEvent::ARROW_DOWN:
         LOG("[KEY] Pfeil RUNTER");
         break;
-    case KeyEvent::KEY_S:
-        LOG("[KEY] STOP");
+    case KeyEvent::KEY_D:
+        LOG("[KEY] DISARM");
         break;
     case KeyEvent::KEY_R:
         baro.calibrate();
@@ -552,21 +539,17 @@ void loop()
         lastHeight = h;
     }
 
-    KeyEvent key = getSerialKey();
-    if (key == KeyEvent::NONE)
-        key = bt.getKey();
-
-    // Mehrzeichen-Befehle via Serial (PID-Tuning: P=x.x etc.)
-    if (_serCmd.length() > 0)
-    {
-        bt.processCommand(_serCmd, pidHeight, pidRoll, pidPitch, settings);
-        _serCmd = "";
-    }
-    // Mehrzeichen-Befehle via BT (P=x.x + Enter)
+    // BT ist primäre Eingabe, USB Serial nur als Backup
+    KeyEvent key = bt.getKey();
     String btCmd = bt.getCommand();
     if (btCmd.length() > 0)
-    {
         bt.processCommand(btCmd, pidHeight, pidRoll, pidPitch, settings);
+
+    if (key == KeyEvent::NONE && btCmd.length() == 0) {
+        key = serial.getKey();
+        String serCmd = serial.getCommand();
+        if (serCmd.length() > 0)
+            bt.processCommand(serCmd, pidHeight, pidRoll, pidPitch, settings);
     }
 
     switch (key)
@@ -619,7 +602,7 @@ void loop()
         }
         break;
 
-    case KeyEvent::KEY_S:
+    case KeyEvent::KEY_D:
         disarm();
         break;
 

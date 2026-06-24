@@ -3,23 +3,36 @@
 #include "config.h"
 #include "pins.h"
 
-// Echo-Fenster nach dem Senden verlängern (HC-06 spiegelt TX zurück an RX)
-// Max. 300 ms damit bei I2C-Fehlern kein Dauer-Block entsteht
-static void _extendEcho(uint32_t &echoUntilMs, uint16_t msgLen) {
-    uint32_t windowMs = (msgLen * 2u) + 30u;
-    if (windowMs > 300u) windowMs = 300u;
-    uint32_t deadline = millis() + windowMs;
-    if (deadline > echoUntilMs) echoUntilMs = deadline;
+void BluetoothComm::_pushSent(char c) {
+    uint8_t next = _sentTail + 1;
+    if (next != _sentHead)
+        _sentBuf[_sentTail++] = c;
+}
+
+bool BluetoothComm::_popSent(char c) {
+    if (_sentHead == _sentTail) return false;
+    if (_sentBuf[_sentHead] != c) return false;
+    _sentHead++;
+    return true;
 }
 
 void BluetoothComm::send(const char* msg) {
+    for (const char* p = msg; *p; p++) _pushSent(*p);
     BT_UART.print(msg);
-    _extendEcho(_echoUntilMs, strlen(msg));
 }
 
 void BluetoothComm::sendLine(const char* msg) {
+    for (const char* p = msg; *p; p++) _pushSent(*p);
+    _pushSent('\r');
+    _pushSent('\n');
     BT_UART.println(msg);
-    _extendEcho(_echoUntilMs, strlen(msg) + 2); // +2 für \r\n
+}
+
+void BluetoothComm::flushEcho() {
+    BT_UART.flush();
+    delay(150);
+    while (BT_UART.available()) BT_UART.read();
+    _sentHead = _sentTail = 0;
 }
 
 void BluetoothComm::begin() {
@@ -27,20 +40,18 @@ void BluetoothComm::begin() {
     Serial1.setRX(PIN_BT_RX);
     BT_UART.begin(BT_BAUD);
     sendLine("[BT] Drohne bereit");
-    sendLine("[BT] Befehle: P=x.x | I=x.x | D=x.x | RP=x.x | ?");
+    sendLine("[BT] Befehle: A D R L H  +/-");
+    sendLine("[BT] PID: P=x I=x D=x  RP= RI= RD=  PP= PI= PD=");
+    sendLine("[BT] SAVE RESET  ?");
     LOG("[BT] Bluetooth bereit");
 }
 
+// Alle BT-Befehle erfordern Newline (\n oder \r\n).
+// Dadurch koennen mehrteilige Befehle (RP=2.0) korrekt gepuffert werden,
+// ohne dass das erste Zeichen (R) voreilig als KEY_R abgefeuert wird.
 KeyEvent BluetoothComm::getKey() {
     _command = "";
 
-    // TX-Echo unterdrücken: HC-06 spiegelt gesendete Bytes zurück an RX
-    if (millis() < _echoUntilMs) {
-        while (BT_UART.available()) BT_UART.read();
-        return KeyEvent::NONE;
-    }
-
-    // Veraltete Bytes (z.B. HC-06 Init-String "link") nach 500 ms verwerfen
     if (_buffer.length() > 0 && (millis() - _lastCharMs) > 500) {
         _buffer = "";
     }
@@ -48,43 +59,33 @@ KeyEvent BluetoothComm::getKey() {
     while (BT_UART.available()) {
         uint8_t c = BT_UART.read();
 
+        if (_popSent(c)) continue;
+
         if (c == '\r' || c == '\n') {
+            if (_buffer.length() == 0) continue;  // Leerzeile ignorieren
+
             if (_buffer.length() == 1) {
                 char ch = toupper(_buffer[0]);
                 _buffer = "";
                 switch (ch) {
                     case 'A': return KeyEvent::KEY_A;
-                    case 'S': return KeyEvent::KEY_S;
+                    case 'D': return KeyEvent::KEY_D;
                     case 'H': return KeyEvent::KEY_H;
                     case 'R': return KeyEvent::KEY_R;
                     case 'L': return KeyEvent::KEY_L;
                     case '+': return KeyEvent::ARROW_UP;
                     case '-': return KeyEvent::ARROW_DOWN;
-                    default:  _command = String(ch); break;
+                    default:  _command = String(ch); return KeyEvent::NONE;
                 }
-            } else if (_buffer.length() > 1) {
+            } else {
                 _command = _buffer;
                 _buffer = "";
+                return KeyEvent::NONE;
             }
         } else if (c >= 0x20) {
             _lastCharMs = millis();
-            if (_buffer.length() == 0) {
-                // Sofortiger Key ohne Enter — wie USB Serial
-                char ch = toupper(c);
-                switch (ch) {
-                    case 'A': return KeyEvent::KEY_A;
-                    case 'S': return KeyEvent::KEY_S;
-                    case 'H': return KeyEvent::KEY_H;
-                    case 'R': return KeyEvent::KEY_R;
-                    case 'L': return KeyEvent::KEY_L;
-                    case '+': return KeyEvent::ARROW_UP;
-                    case '-': return KeyEvent::ARROW_DOWN;
-                    default:  _buffer += (char)c; break;
-                }
-            } else {
-                _buffer += (char)c;
-                if (_buffer.length() > 100) _buffer = "";
-            }
+            _buffer += (char)c;
+            if (_buffer.length() > 100) _buffer = "";
         }
     }
 
@@ -95,7 +96,6 @@ String BluetoothComm::getCommand() {
     return _command;
 }
 
-
 void BluetoothComm::processCommand(const String &cmd,
                                    PIDController &pidHeight,
                                    PIDController &pidRoll,
@@ -104,36 +104,53 @@ void BluetoothComm::processCommand(const String &cmd,
     if (cmd.length() == 0) return;
 
     if (cmd == "?") {
-        sendLine("[BT] === Hoehe ===");
-        char buf[32];
-        snprintf(buf, sizeof(buf), "[BT] Kp=%.4f", pidHeight.getKp()); sendLine(buf);
-        snprintf(buf, sizeof(buf), "[BT] Ki=%.4f", pidHeight.getKi()); sendLine(buf);
-        snprintf(buf, sizeof(buf), "[BT] Kd=%.4f", pidHeight.getKd()); sendLine(buf);
-        sendLine("[BT] === Roll ===");
-        snprintf(buf, sizeof(buf), "[BT] Kp=%.4f", pidRoll.getKp());   sendLine(buf);
-        snprintf(buf, sizeof(buf), "[BT] Ki=%.4f", pidRoll.getKi());   sendLine(buf);
-        snprintf(buf, sizeof(buf), "[BT] Kd=%.4f", pidRoll.getKd());   sendLine(buf);
-        sendLine("[BT] === Pitch ===");
-        snprintf(buf, sizeof(buf), "[BT] Kp=%.4f", pidPitch.getKp());  sendLine(buf);
-        snprintf(buf, sizeof(buf), "[BT] Ki=%.4f", pidPitch.getKi());  sendLine(buf);
-        snprintf(buf, sizeof(buf), "[BT] Kd=%.4f", pidPitch.getKd());  sendLine(buf);
+        LOG("[PID] === Hoehe ===");
+        LOG_FMT("[PID] Kp=%.4f", pidHeight.getKp());
+        LOG_FMT("[PID] Ki=%.4f", pidHeight.getKi());
+        LOG_FMT("[PID] Kd=%.4f", pidHeight.getKd());
+        LOG("[PID] === Roll ===");
+        LOG_FMT("[PID] Kp=%.4f", pidRoll.getKp());
+        LOG_FMT("[PID] Ki=%.4f", pidRoll.getKi());
+        LOG_FMT("[PID] Kd=%.4f", pidRoll.getKd());
+        LOG("[PID] === Pitch ===");
+        LOG_FMT("[PID] Kp=%.4f", pidPitch.getKp());
+        LOG_FMT("[PID] Ki=%.4f", pidPitch.getKi());
+        LOG_FMT("[PID] Kd=%.4f", pidPitch.getKd());
         return;
     }
 
-    char p0 = toupper(cmd[0]);
-    char p1 = cmd.length() > 1 ? toupper(cmd[1]) : 0;
+    // EEPROM-Befehle (Grossbuchstaben, case-insensitiv)
+    String ucmd = cmd;
+    ucmd.toUpperCase();
 
-    if (p0 == 'R' && p1 == 'P' && cmd[2] == '=') {
+    if (ucmd == "SAVE") {
+        settings.save(pidHeight.getKp(), pidHeight.getKi(), pidHeight.getKd());
+        sendLine("[BT] PID Hoehe gespeichert");
+        return;
+    }
+    if (ucmd == "RESET") {
+        settings.reset();
+        pidHeight.setKp(PID_KP_HEIGHT);
+        pidHeight.setKi(PID_KI_HEIGHT);
+        pidHeight.setKd(PID_KD_HEIGHT);
+        sendLine("[BT] PID auf Standard zurueckgesetzt");
+        return;
+    }
+
+    char p0 = ucmd[0];
+    char p1 = ucmd.length() > 1 ? ucmd[1] : 0;
+
+    if (p0 == 'R' && p1 == 'P' && cmd.length() > 2 && cmd[2] == '=') {
         pidRoll.setKp(cmd.substring(3).toFloat());
-    } else if (p0 == 'R' && p1 == 'I' && cmd[2] == '=') {
+    } else if (p0 == 'R' && p1 == 'I' && cmd.length() > 2 && cmd[2] == '=') {
         pidRoll.setKi(cmd.substring(3).toFloat());
-    } else if (p0 == 'R' && p1 == 'D' && cmd[2] == '=') {
+    } else if (p0 == 'R' && p1 == 'D' && cmd.length() > 2 && cmd[2] == '=') {
         pidRoll.setKd(cmd.substring(3).toFloat());
-    } else if (p0 == 'P' && p1 == 'P' && cmd[2] == '=') {
+    } else if (p0 == 'P' && p1 == 'P' && cmd.length() > 2 && cmd[2] == '=') {
         pidPitch.setKp(cmd.substring(3).toFloat());
-    } else if (p0 == 'P' && p1 == 'I' && cmd[2] == '=') {
+    } else if (p0 == 'P' && p1 == 'I' && cmd.length() > 2 && cmd[2] == '=') {
         pidPitch.setKi(cmd.substring(3).toFloat());
-    } else if (p0 == 'P' && p1 == 'D' && cmd[2] == '=') {
+    } else if (p0 == 'P' && p1 == 'D' && cmd.length() > 2 && cmd[2] == '=') {
         pidPitch.setKd(cmd.substring(3).toFloat());
     } else if (cmd.length() >= 3 && p1 == '=') {
         float value = cmd.substring(2).toFloat();
@@ -141,6 +158,15 @@ void BluetoothComm::processCommand(const String &cmd,
             case 'P': pidHeight.setKp(value); break;
             case 'I': pidHeight.setKi(value); break;
             case 'D': pidHeight.setKd(value); break;
+            default: {
+                char buf[40];
+                snprintf(buf, sizeof(buf), "[BT] Unbekannt: %s", cmd.c_str());
+                sendLine(buf);
+            }
         }
+    } else {
+        char buf[40];
+        snprintf(buf, sizeof(buf), "[BT] Unbekannt: %s", cmd.c_str());
+        sendLine(buf);
     }
 }

@@ -84,7 +84,7 @@ void PIDController::reset()
 void PIDController::setKp(float kp)
 {
     _kp = _clampCoeff(kp, "Kp");
-    LOG_FMT("[PID] Kp=%.4", _kp);
+    LOG_FMT("[PID] Kp=%.4f", _kp);
 }
 
 void PIDController::setKi(float ki)
