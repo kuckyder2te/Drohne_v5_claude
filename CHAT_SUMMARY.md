@@ -1,5 +1,5 @@
 # Drohne Pico — Projektzusammenfassung
-> Letzte Aktualisierung: 10.06.2026  
+> Letzte Aktualisierung: 25.06.2026  
 > Projektpfad: `H:\hobby\Projekte\Drohne\VS Code\Drohne_v5_Claude`
 
 ---
@@ -173,14 +173,18 @@ build_flags =
 
 ## Bluetooth-Befehle (HC-06)
 
+Alle Befehle sind **Großbuchstaben** (intern per `toupper()` normalisiert).  
+Einzelbefehle (A, D, R, L, H, +, -, ?, S) werden nach 200 ms Timeout ohne Newline ausgeführt.  
+PID-Befehle (z.B. `P=5.0`) entweder mit Enter abschließen oder schnell tippen (< 200 ms pro Zeichen).
+
 ### Steuerung
 | Befehl | Funktion |
 |--------|----------|
-| `a` | ARM (2× drücken innerhalb 3s) |
-| `s` | DISARM (sofort!) |
-| `r` | Barometer rekalibrieren |
-| `l` | Statusausgabe ein/aus |
-| `h` | Hilfe anzeigen |
+| `A` | ARM (2× drücken innerhalb 3s) |
+| `D` | DISARM (sofort!) |
+| `R` | Barometer rekalibrieren |
+| `L` | Statusausgabe ein/aus |
+| `H` | Hilfe anzeigen |
 | `+` | Zielhöhe +10 cm |
 | `-` | Zielhöhe -10 cm |
 
@@ -204,10 +208,50 @@ build_flags =
 ### Speichern & Abfragen
 | Befehl | Funktion |
 |--------|----------|
-| `?` | Aktuelle PID-Werte abfragen |
+| `?` | Alle PID-Werte abfragen (Ausgabe via BT) |
+| `S` | Höhen-PID in EEPROM speichern |
+| `RESET` | PID auf Standardwerte zurücksetzen |
 
-> **Hinweis:** `S` (Save) und `R` (Reset PID) sind aktuell nicht per BT nutzbar —
-> Einzelbuchstabe `s` = DISARM, `r` = Rekalibrierung. Fix steht aus.
+> Alle PID-Setzungen geben eine Bestätigung zurück, z.B. `[BT] Hoehe Kp=5.000`.
+
+---
+
+## BT-Kommunikation Fixes (2026-06-25)
+
+### Problem: PID-Eingabe zeichenweise als "Unbekannt" ausgegeben
+**Symptom:** Eingabe von `P=5.0` lieferte:
+```
+[BT] Unbekannt: P
+[BT] Unbekannt: =
+[BT] Unbekannt: 5
+...
+```
+**Ursache:** Der 200-ms-Timeout in `BluetoothComm::getKey()` dispatchtete jeden
+unbekannten Einzelbuchstaben sofort als eigenständigen Befehl, bevor das nächste
+Zeichen ankam (Tipp-Geschwindigkeit > 200 ms/Zeichen).
+
+**Lösung (`src/comm/BluetoothComm.cpp`):**  
+Im Timeout-Zweig für Einzelzeichen: unbekannte Zeichen bleiben im Buffer und werden
+**nicht** dispatcht — sie warten auf den Newline oder weitere Zeichen (Multi-Char-Timeout).
+Nur die bekannten Steuerzeichen (A, D, H, R, L, +, -, ?, S) werden per Timeout sofort ausgeführt.
+
+### Problem: `?` und `S` funktionierten nicht
+**Ursache:** Mit dem obigen Fix blieben auch `?` und `S` im Buffer hängen, da sie nicht
+im Timeout-Switch standen.  
+**Lösung:** `?` und `S` explizit in den Timeout-Switch aufgenommen → werden nach 200 ms
+ohne Newline ausgeführt.
+
+### Problem: `S` löste ARM-Sequenz aus beim langsamen Tippen von `SAVE`
+**Ursache:** `S` → Timeout → SAVE ✓, dann `A` → Timeout → `KEY_A` = ARM.  
+**Lösung:** `SAVE` als Befehlswort entfernt. Nur `S` wird als Speichern-Befehl verwendet.
+
+### Problem: PID-Setzungen ohne Rückmeldung
+**Ursache:** `processCommand()` setzte Werte still ohne `sendLine()`-Bestätigung.  
+**Lösung:** Jede PID-Setzung gibt jetzt eine Bestätigung aus, z.B. `[BT] Hoehe Kp=5.000`.
+
+### Problem: `?`-Abfrage nicht auf BT sichtbar
+**Ursache:** `?` nutzte `LOG()` → bei deaktiviertem `_BT_LOG` nur USB Serial.  
+**Lösung:** `?` nutzt jetzt direkt `sendLine()` → immer auf BT sichtbar, unabhängig von `_BT_LOG`.
 
 ---
 

@@ -18,16 +18,16 @@ void BluetoothComm::begin() {
     sendLine("[BT] Drohne bereit");
     sendLine("[BT] Befehle: A D R L H  +/-");
     sendLine("[BT] PID: P=x I=x D=x  RP= RI= RD=  PP= PI= PD=");
-    sendLine("[BT] SAVE RESET  ?");
+    sendLine("[BT] S=Speichern  RESET  ?=Abfrage");
     LOG("[BT] Bluetooth bereit");
 }
 
 KeyEvent BluetoothComm::getKey() {
     _command = "";
 
-    // Timeout: nach 200 ms ohne weiteres Zeichen Befehl ausfuehren (kein Newline noetig)
-    // Unbekannte Einzelzeichen (z.B. 'P' als Anfang von "P=5.0") bleiben im Buffer
-    // und werden erst bei Newline dispatched.
+    // Timeout: nach 200 ms ohne weiteres Zeichen Befehl ausfuehren (kein Newline noetig).
+    // Nur bekannte Steuerzeichen und Einzelbefehle (?, S) werden per Timeout dispatcht.
+    // Unbekannte Zeichen (PID-Prefixe wie P, I, D) bleiben im Buffer bis Newline.
     if (_buffer.length() > 0 && (millis() - _lastCharMs) > 200) {
         if (_buffer.length() == 1) {
             char ch = toupper(_buffer[0]);
@@ -39,6 +39,8 @@ KeyEvent BluetoothComm::getKey() {
                 case 'L': _buffer = ""; return KeyEvent::KEY_L;
                 case '+': _buffer = ""; return KeyEvent::ARROW_UP;
                 case '-': _buffer = ""; return KeyEvent::ARROW_DOWN;
+                case '?': _buffer = ""; _command = "?"; return KeyEvent::NONE;
+                case 'S': _buffer = ""; _command = "S"; return KeyEvent::NONE;
                 default:  return KeyEvent::NONE; // im Buffer lassen, auf Newline warten
             }
         } else {
@@ -94,25 +96,26 @@ void BluetoothComm::processCommand(const String &cmd,
     if (cmd.length() == 0) return;
 
     if (cmd == "?") {
-        LOG("[PID] === Hoehe ===");
-        LOG_FMT("[PID] Kp=%.4f", pidHeight.getKp());
-        LOG_FMT("[PID] Ki=%.4f", pidHeight.getKi());
-        LOG_FMT("[PID] Kd=%.4f", pidHeight.getKd());
-        LOG("[PID] === Roll ===");
-        LOG_FMT("[PID] Kp=%.4f", pidRoll.getKp());
-        LOG_FMT("[PID] Ki=%.4f", pidRoll.getKi());
-        LOG_FMT("[PID] Kd=%.4f", pidRoll.getKd());
-        LOG("[PID] === Pitch ===");
-        LOG_FMT("[PID] Kp=%.4f", pidPitch.getKp());
-        LOG_FMT("[PID] Ki=%.4f", pidPitch.getKi());
-        LOG_FMT("[PID] Kd=%.4f", pidPitch.getKd());
+        sendLine("[PID] === Hoehe ===");
+        char buf[40];
+        snprintf(buf, sizeof(buf), "[PID] Kp=%.4f", pidHeight.getKp()); sendLine(buf);
+        snprintf(buf, sizeof(buf), "[PID] Ki=%.4f", pidHeight.getKi()); sendLine(buf);
+        snprintf(buf, sizeof(buf), "[PID] Kd=%.4f", pidHeight.getKd()); sendLine(buf);
+        sendLine("[PID] === Roll ===");
+        snprintf(buf, sizeof(buf), "[PID] Kp=%.4f", pidRoll.getKp()); sendLine(buf);
+        snprintf(buf, sizeof(buf), "[PID] Ki=%.4f", pidRoll.getKi()); sendLine(buf);
+        snprintf(buf, sizeof(buf), "[PID] Kd=%.4f", pidRoll.getKd()); sendLine(buf);
+        sendLine("[PID] === Pitch ===");
+        snprintf(buf, sizeof(buf), "[PID] Kp=%.4f", pidPitch.getKp()); sendLine(buf);
+        snprintf(buf, sizeof(buf), "[PID] Ki=%.4f", pidPitch.getKi()); sendLine(buf);
+        snprintf(buf, sizeof(buf), "[PID] Kd=%.4f", pidPitch.getKd()); sendLine(buf);
         return;
     }
 
     String ucmd = cmd;
     ucmd.toUpperCase();
 
-    if (ucmd == "SAVE") {
+    if (ucmd == "SAVE" || ucmd == "S") {
         settings.save(pidHeight.getKp(), pidHeight.getKi(), pidHeight.getKd());
         sendLine("[BT] PID Hoehe gespeichert");
         return;
@@ -128,33 +131,52 @@ void BluetoothComm::processCommand(const String &cmd,
 
     char p0 = ucmd[0];
     char p1 = ucmd.length() > 1 ? ucmd[1] : 0;
+    char buf[50];
 
     if (p0 == 'R' && p1 == 'P' && cmd.length() > 2 && cmd[2] == '=') {
-        pidRoll.setKp(cmd.substring(3).toFloat());
+        float v = cmd.substring(3).toFloat();
+        pidRoll.setKp(v);
+        snprintf(buf, sizeof(buf), "[BT] Roll Kp=%.3f", v); sendLine(buf);
     } else if (p0 == 'R' && p1 == 'I' && cmd.length() > 2 && cmd[2] == '=') {
-        pidRoll.setKi(cmd.substring(3).toFloat());
+        float v = cmd.substring(3).toFloat();
+        pidRoll.setKi(v);
+        snprintf(buf, sizeof(buf), "[BT] Roll Ki=%.3f", v); sendLine(buf);
     } else if (p0 == 'R' && p1 == 'D' && cmd.length() > 2 && cmd[2] == '=') {
-        pidRoll.setKd(cmd.substring(3).toFloat());
+        float v = cmd.substring(3).toFloat();
+        pidRoll.setKd(v);
+        snprintf(buf, sizeof(buf), "[BT] Roll Kd=%.3f", v); sendLine(buf);
     } else if (p0 == 'P' && p1 == 'P' && cmd.length() > 2 && cmd[2] == '=') {
-        pidPitch.setKp(cmd.substring(3).toFloat());
+        float v = cmd.substring(3).toFloat();
+        pidPitch.setKp(v);
+        snprintf(buf, sizeof(buf), "[BT] Pitch Kp=%.3f", v); sendLine(buf);
     } else if (p0 == 'P' && p1 == 'I' && cmd.length() > 2 && cmd[2] == '=') {
-        pidPitch.setKi(cmd.substring(3).toFloat());
+        float v = cmd.substring(3).toFloat();
+        pidPitch.setKi(v);
+        snprintf(buf, sizeof(buf), "[BT] Pitch Ki=%.3f", v); sendLine(buf);
     } else if (p0 == 'P' && p1 == 'D' && cmd.length() > 2 && cmd[2] == '=') {
-        pidPitch.setKd(cmd.substring(3).toFloat());
+        float v = cmd.substring(3).toFloat();
+        pidPitch.setKd(v);
+        snprintf(buf, sizeof(buf), "[BT] Pitch Kd=%.3f", v); sendLine(buf);
     } else if (cmd.length() >= 3 && p1 == '=') {
         float value = cmd.substring(2).toFloat();
         switch (p0) {
-            case 'P': pidHeight.setKp(value); break;
-            case 'I': pidHeight.setKi(value); break;
-            case 'D': pidHeight.setKd(value); break;
-            default: {
-                char buf[40];
+            case 'P':
+                pidHeight.setKp(value);
+                snprintf(buf, sizeof(buf), "[BT] Hoehe Kp=%.3f", value); sendLine(buf);
+                break;
+            case 'I':
+                pidHeight.setKi(value);
+                snprintf(buf, sizeof(buf), "[BT] Hoehe Ki=%.3f", value); sendLine(buf);
+                break;
+            case 'D':
+                pidHeight.setKd(value);
+                snprintf(buf, sizeof(buf), "[BT] Hoehe Kd=%.3f", value); sendLine(buf);
+                break;
+            default:
                 snprintf(buf, sizeof(buf), "[BT] Unbekannt: %s", cmd.c_str());
                 sendLine(buf);
-            }
         }
     } else {
-        char buf[40];
         snprintf(buf, sizeof(buf), "[BT] Unbekannt: %s", cmd.c_str());
         sendLine(buf);
     }
