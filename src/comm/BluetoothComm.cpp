@@ -3,36 +3,12 @@
 #include "config.h"
 #include "pins.h"
 
-void BluetoothComm::_pushSent(char c) {
-    uint8_t next = _sentTail + 1;
-    if (next != _sentHead)
-        _sentBuf[_sentTail++] = c;
-}
-
-bool BluetoothComm::_popSent(char c) {
-    if (_sentHead == _sentTail) return false;
-    if (_sentBuf[_sentHead] != c) return false;
-    _sentHead++;
-    return true;
-}
-
 void BluetoothComm::send(const char* msg) {
-    for (const char* p = msg; *p; p++) _pushSent(*p);
     BT_UART.print(msg);
 }
 
 void BluetoothComm::sendLine(const char* msg) {
-    for (const char* p = msg; *p; p++) _pushSent(*p);
-    _pushSent('\r');
-    _pushSent('\n');
     BT_UART.println(msg);
-}
-
-void BluetoothComm::flushEcho() {
-    BT_UART.flush();
-    delay(150);
-    while (BT_UART.available()) BT_UART.read();
-    _sentHead = _sentTail = 0;
 }
 
 void BluetoothComm::begin() {
@@ -46,23 +22,37 @@ void BluetoothComm::begin() {
     LOG("[BT] Bluetooth bereit");
 }
 
-// Alle BT-Befehle erfordern Newline (\n oder \r\n).
-// Dadurch koennen mehrteilige Befehle (RP=2.0) korrekt gepuffert werden,
-// ohne dass das erste Zeichen (R) voreilig als KEY_R abgefeuert wird.
 KeyEvent BluetoothComm::getKey() {
     _command = "";
 
-    if (_buffer.length() > 0 && (millis() - _lastCharMs) > 500) {
-        _buffer = "";
+    // Timeout: nach 200 ms ohne weiteres Zeichen Befehl ausfuehren (kein Newline noetig)
+    // Unbekannte Einzelzeichen (z.B. 'P' als Anfang von "P=5.0") bleiben im Buffer
+    // und werden erst bei Newline dispatched.
+    if (_buffer.length() > 0 && (millis() - _lastCharMs) > 200) {
+        if (_buffer.length() == 1) {
+            char ch = toupper(_buffer[0]);
+            switch (ch) {
+                case 'A': _buffer = ""; return KeyEvent::KEY_A;
+                case 'D': _buffer = ""; return KeyEvent::KEY_D;
+                case 'H': _buffer = ""; return KeyEvent::KEY_H;
+                case 'R': _buffer = ""; return KeyEvent::KEY_R;
+                case 'L': _buffer = ""; return KeyEvent::KEY_L;
+                case '+': _buffer = ""; return KeyEvent::ARROW_UP;
+                case '-': _buffer = ""; return KeyEvent::ARROW_DOWN;
+                default:  return KeyEvent::NONE; // im Buffer lassen, auf Newline warten
+            }
+        } else {
+            _command = _buffer;
+            _buffer = "";
+            return KeyEvent::NONE;
+        }
     }
 
     while (BT_UART.available()) {
         uint8_t c = BT_UART.read();
 
-        if (_popSent(c)) continue;
-
         if (c == '\r' || c == '\n') {
-            if (_buffer.length() == 0) continue;  // Leerzeile ignorieren
+            if (_buffer.length() == 0) continue;
 
             if (_buffer.length() == 1) {
                 char ch = toupper(_buffer[0]);
@@ -119,7 +109,6 @@ void BluetoothComm::processCommand(const String &cmd,
         return;
     }
 
-    // EEPROM-Befehle (Grossbuchstaben, case-insensitiv)
     String ucmd = cmd;
     ucmd.toUpperCase();
 

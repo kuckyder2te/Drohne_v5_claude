@@ -255,7 +255,6 @@ void setup()
 
     printHelp();
     LOG("[CTRL] Bereit - 'a' zum Armen");
-    bt.flushEcho();
 
 #endif // TEST_ULTRASONIC
 #endif // TEST_I2C_SCAN
