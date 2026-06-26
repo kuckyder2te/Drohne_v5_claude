@@ -114,27 +114,26 @@ drone_pico/
 ## platformio.ini (aktuell)
 
 ```ini
-[env:pico]
-platform = raspberrypi
-board = pico
+[env:rpipico]
+platform = https://github.com/maxgerhardt/platform-raspberrypi.git
+board_build.core = earlephilhower
+board = rpipico
 framework = arduino
-
-monitor_speed = 115200
 upload_protocol = picotool
+monitor_port = COM17
+monitor_speed = 115200
 
 lib_deps =
-    bakercp/Logger@^1.0.3
-    nrf24/RF24@^1.4.8
-    robtillaart/MS5611@^0.3.9
-    adafruit/Adafruit Unified Sensor@^1.1.6
-    hideakitai/MPU9250@^0.4.8
-    adafruit/Adafruit BusIO@^1.14.1
+	nrf24/RF24@^1.4.8
+	robtillaart/MS5611@^0.4.0
+	wollewald/ICM20948_WE@^1.1.5
+	
 
 build_flags =
     -DGLOBAL_DEBUG
 ;   -DLOG_TIMESTAMP
 ;   -D_DEBUG_=VERBOSE
-    -D_DEBUG_=NOTICE
+;   -D_DEBUG_=NOTICE
 ;   -D_DEBUG_=WARNING
 ;   -D_DEBUG_=FATAL
 ```
