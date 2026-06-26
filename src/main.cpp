@@ -469,6 +469,9 @@ void loop()
 #ifdef TEST_KEYBOARD
     baro.update();
     KeyEvent key = bt.getKey();
+    String tkCmd = bt.getCommand();
+    if (tkCmd.length() > 0)
+        bt.processCommand(tkCmd, pidHeight, pidRoll, pidPitch, settings);
     switch (key)
     {
     case KeyEvent::ARROW_UP:

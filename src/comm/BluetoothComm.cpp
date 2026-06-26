@@ -25,28 +25,21 @@ void BluetoothComm::begin() {
 KeyEvent BluetoothComm::getKey() {
     _command = "";
 
-    // Timeout: nach 200 ms ohne weiteres Zeichen Befehl ausfuehren (kein Newline noetig).
-    // Nur bekannte Steuerzeichen und Einzelbefehle (?, S) werden per Timeout dispatcht.
-    // Unbekannte Zeichen (PID-Prefixe wie P, I, D) bleiben im Buffer bis Newline.
-    if (_buffer.length() > 0 && (millis() - _lastCharMs) > 200) {
-        if (_buffer.length() == 1) {
-            char ch = toupper(_buffer[0]);
-            switch (ch) {
-                case 'A': _buffer = ""; return KeyEvent::KEY_A;
-                case 'D': _buffer = ""; return KeyEvent::KEY_D;
-                case 'H': _buffer = ""; return KeyEvent::KEY_H;
-                case 'R': _buffer = ""; return KeyEvent::KEY_R;
-                case 'L': _buffer = ""; return KeyEvent::KEY_L;
-                case '+': _buffer = ""; return KeyEvent::ARROW_UP;
-                case '-': _buffer = ""; return KeyEvent::ARROW_DOWN;
-                case '?': _buffer = ""; _command = "?"; return KeyEvent::NONE;
-                case 'S': _buffer = ""; _command = "S"; return KeyEvent::NONE;
-                default:  return KeyEvent::NONE; // im Buffer lassen, auf Newline warten
-            }
-        } else {
-            _command = _buffer;
-            _buffer = "";
-            return KeyEvent::NONE;
+    // Timeout nur fuer Einzelzeichen (200 ms): A, D, H, R, L, +, -, ?, S
+    // Mehrzeichenbefehle (PID-Werte, RESET) werden ausschliesslich per Newline abgeschlossen.
+    if (_buffer.length() == 1 && (millis() - _lastCharMs) > 200) {
+        char ch = toupper(_buffer[0]);
+        switch (ch) {
+            case 'A': _buffer = ""; return KeyEvent::KEY_A;
+            case 'D': _buffer = ""; return KeyEvent::KEY_D;
+            case 'H': _buffer = ""; return KeyEvent::KEY_H;
+            case 'R': _buffer = ""; return KeyEvent::KEY_R;
+            case 'L': _buffer = ""; return KeyEvent::KEY_L;
+            case '+': _buffer = ""; return KeyEvent::ARROW_UP;
+            case '-': _buffer = ""; return KeyEvent::ARROW_DOWN;
+            case '?': _buffer = ""; _command = "?"; return KeyEvent::NONE;
+            case 'S': _buffer = ""; _command = "S"; return KeyEvent::NONE;
+            default:  break; // unbekannt: weiter UART lesen
         }
     }
 
@@ -133,32 +126,35 @@ void BluetoothComm::processCommand(const String &cmd,
     char p1 = ucmd.length() > 1 ? ucmd[1] : 0;
     char buf[50];
 
-    if (p0 == 'R' && p1 == 'P' && cmd.length() > 2 && cmd[2] == '=') {
-        float v = cmd.substring(3).toFloat();
+    // Komma als Dezimaltrennzeichen akzeptieren (deutsche Tastatur)
+    ucmd.replace(',', '.');
+
+    if (p0 == 'R' && p1 == 'P' && ucmd.length() > 2 && ucmd[2] == '=') {
+        float v = ucmd.substring(3).toFloat();
         pidRoll.setKp(v);
         snprintf(buf, sizeof(buf), "[BT] Roll Kp=%.3f", v); sendLine(buf);
-    } else if (p0 == 'R' && p1 == 'I' && cmd.length() > 2 && cmd[2] == '=') {
-        float v = cmd.substring(3).toFloat();
+    } else if (p0 == 'R' && p1 == 'I' && ucmd.length() > 2 && ucmd[2] == '=') {
+        float v = ucmd.substring(3).toFloat();
         pidRoll.setKi(v);
         snprintf(buf, sizeof(buf), "[BT] Roll Ki=%.3f", v); sendLine(buf);
-    } else if (p0 == 'R' && p1 == 'D' && cmd.length() > 2 && cmd[2] == '=') {
-        float v = cmd.substring(3).toFloat();
+    } else if (p0 == 'R' && p1 == 'D' && ucmd.length() > 2 && ucmd[2] == '=') {
+        float v = ucmd.substring(3).toFloat();
         pidRoll.setKd(v);
         snprintf(buf, sizeof(buf), "[BT] Roll Kd=%.3f", v); sendLine(buf);
-    } else if (p0 == 'P' && p1 == 'P' && cmd.length() > 2 && cmd[2] == '=') {
-        float v = cmd.substring(3).toFloat();
+    } else if (p0 == 'P' && p1 == 'P' && ucmd.length() > 2 && ucmd[2] == '=') {
+        float v = ucmd.substring(3).toFloat();
         pidPitch.setKp(v);
         snprintf(buf, sizeof(buf), "[BT] Pitch Kp=%.3f", v); sendLine(buf);
-    } else if (p0 == 'P' && p1 == 'I' && cmd.length() > 2 && cmd[2] == '=') {
-        float v = cmd.substring(3).toFloat();
+    } else if (p0 == 'P' && p1 == 'I' && ucmd.length() > 2 && ucmd[2] == '=') {
+        float v = ucmd.substring(3).toFloat();
         pidPitch.setKi(v);
         snprintf(buf, sizeof(buf), "[BT] Pitch Ki=%.3f", v); sendLine(buf);
-    } else if (p0 == 'P' && p1 == 'D' && cmd.length() > 2 && cmd[2] == '=') {
-        float v = cmd.substring(3).toFloat();
+    } else if (p0 == 'P' && p1 == 'D' && ucmd.length() > 2 && ucmd[2] == '=') {
+        float v = ucmd.substring(3).toFloat();
         pidPitch.setKd(v);
         snprintf(buf, sizeof(buf), "[BT] Pitch Kd=%.3f", v); sendLine(buf);
-    } else if (cmd.length() >= 3 && p1 == '=') {
-        float value = cmd.substring(2).toFloat();
+    } else if (ucmd.length() >= 3 && p1 == '=') {
+        float value = ucmd.substring(2).toFloat();
         switch (p0) {
             case 'P':
                 pidHeight.setKp(value);
