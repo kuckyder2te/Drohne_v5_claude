@@ -19,6 +19,7 @@
 9. [Entwicklungsstand](#entwicklungsstand)
 10. [Bekannte Probleme & Lösungen](#bekannte-probleme--lösungen)
 11. [Entwicklungsregeln](#entwicklungsregeln)
+12. [Sicherheit & Handhabung](#sicherheit--handhabung)
 
 ---
 
@@ -73,6 +74,10 @@ Diagonal gegenüberliegende Motoren drehen gleich (FL/BR im Uhrzeigersinn, FR/BL
 | Back Right (BR) | PIN 13 | CW ↻ | weiß | schwarz |
 
 > Die Motor-Mixing-Formeln in `MotorMixer::mix()` (`FL = throttle - roll + pitch`, `FR = throttle + roll + pitch`, `BL = throttle - roll - pitch`, `BR = throttle + roll - pitch`) hängen nur von der Position ab, nicht von der Propeller-Drehrichtung — die Drehrichtung selbst wird rein mechanisch durch die ESC-Motor-Verkabelung festgelegt.
+
+> ⚠️ **Absolute CW/CCW-Zuordnung ist nicht "die einzig richtige":** Physikalisch zwingend ist nur, dass diagonale Motoren gleich und benachbarte gegensätzlich drehen (Summe Reaktionsdrehmoment = 0). Welche Diagonale konkret CW und welche CCW ist, ist spiegelbildlich beliebig — andere Quellen (z. B. ArduPilot/PX4-Konvention) nennen genau die umgekehrte Zuordnung (FL=CCW/FR=CW/BL=CW/BR=CCW) und haben trotzdem recht. Die obige Tabelle gilt speziell für **dieses** Board (eigener Arm-Farbe-Test), nicht als Allgemeinregel.
+>
+> **Sicherheitskritisch ist stattdessen:** Jeder Motor braucht die zu seiner tatsächlichen (gemessenen) Drehrichtung passende Propeller-Steigung (Normal- vs. Pusher-Prop) — sonst schiebt der Propeller Luft nach oben statt unten. Vor der Propeller-Montage: Motor per `TEST_MOTORS_SINGLE` ohne Last einzeln laufen lassen, Drehrichtung von oben beobachten, dann passenden Prop-Typ montieren. Nicht aus abstrakten Konventionen ableiten.
 
 ---
 
@@ -536,6 +541,51 @@ Download: https://datasheets.raspberrypi.com/soft/flash_nuke.uf2
 - `.h` in `include/`, `.cpp` in `src/`
 - Test-Modi nie im Produktivbetrieb aktiv lassen
 - PID-Werte nach Änderung immer mit `S` speichern
+
+---
+
+## Sicherheit & Handhabung
+
+### ESD-Schutz & Komponentenhandhabung
+
+Besonders gefährdete Bauteile:
+
+| Komponente | Empfindlichkeit |
+|---|---|
+| RP2040 (Pico) | Sehr hoch — CMOS-Prozessor |
+| ICM-20948 / IMU | Hoch — MEMS-Struktur |
+| MS5611 | Hoch — Drucksensor-Membran |
+| MOSFETs in ESCs | Mittel-hoch |
+
+Maßnahmen (Priorität):
+1. **Antistatik-Armband** beim Arbeiten tragen
+2. Antistatik-Arbeitsmatte (~10–15 €) empfohlen
+3. Ersatz-Platinen in **antistatischen Tüten** lagern
+4. Vor dem Anfassen: kurz geerdetes Metallteil berühren (Heizung, PC-Gehäuse)
+5. **USB-Kabel ziehen**, bevor am Board gearbeitet wird
+6. Lötreihenfolge: zuerst GND, zuletzt VCC
+7. I2C-Kabel **niemals** im laufenden Betrieb stecken → Chip-Schaden möglich
+
+> **Erfahrung aus diesem Projekt:** Drei IMU-Boards (MPU9250) wurden durch ESD zerstört, bevor auf ICM-20948 mit konsequentem ESD-Schutz umgestellt wurde.
+
+### Ein-/Ausschalten — Reihenfolge & Hinweise
+
+**Einschalten:**
+1. Drohne **ruhig hinlegen** — IMU kalibriert Gyro-Offsets beim Start
+2. **Akku anschließen** → ESCs piepen (Initialisierung abwarten)
+3. **~30–90 s warten** — Barometer-Aufwärmzeit; erst danach `a` (ARM)
+4. USB optional danach für Serial-Monitor
+
+**Ausschalten:**
+1. **`s` drücken** (DISARM) — Motoren auf Minimum
+2. Erst danach Akku trennen
+3. Nie unter Last trennen — Lichtbogen schadet Kontakten und ESCs
+
+**ESD beim Stecken:**
+- Stecker immer am Gehäuse anfassen, nie an Pins
+- XT60-Stecker zügig verbinden (langsames Stecken → Lichtbogen)
+- **Anti-Spark-Widerstand** am XT60 empfehlenswert (~2 €)
+- I2C-Kabel (IMU, MS5611) niemals im laufenden Betrieb stecken
 
 ---
 
