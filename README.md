@@ -54,7 +54,7 @@
 Diagonal gegenüberliegende Motoren drehen gleich (FL/BR gegen den Uhrzeigersinn, FR/BL im Uhrzeigersinn) — das hebt das Reaktionsdrehmoment der Propeller auf, damit die Drohne nicht unkontrolliert um die Hochachse (Yaw) dreht. Am Boden per Motor-Nut-Farbe (schwarz/rot) verifiziert und in Schritt 8 gegen `TEST_MOTORS_SINGLE` geprüft.
 
 ```
-      Vorne
+      Vorne      aktuelle Konfiguation
   FL(CCW) FR(CW)
     ↺        ↻
       \    /
@@ -82,6 +82,17 @@ Diagonal gegenüberliegende Motoren drehen gleich (FL/BR gegen den Uhrzeigersinn
 | Front Right (FR) | PIN 12 | CW ↻ | rot | rot |
 | Back Left (BL) | PIN 14 | CW ↻ | weiß | rot |
 | Back Right (BR) | PIN 13 | CCW ↺ | weiß | schwarz |
+
+Physikalisches Prinzip — Drehmoment:
+
+Jeder rotierende Motor erzeugt ein Gegendrehmoment auf den Rahmen:
+FL(CCW) erzeugt → Drehmoment CW auf Rahmen
+FR(CW)  erzeugt → Drehmoment CCW auf Rahmen
+BL(CW)  erzeugt → Drehmoment CCW auf Rahmen
+BR(CCW) erzeugt → Drehmoment CW auf Rahmen
+
+Summe = 0 → Drohne dreht sich nicht! ✅
+
 
 > Die Motor-Mixing-Formeln in `MotorMixer::mix()` (`FL = throttle - roll + pitch`, `FR = throttle + roll + pitch`, `BL = throttle - roll - pitch`, `BR = throttle + roll - pitch`) hängen nur von der Position ab, nicht von der Propeller-Drehrichtung — die Drehrichtung selbst wird rein mechanisch durch die ESC-Motor-Verkabelung festgelegt.
 
