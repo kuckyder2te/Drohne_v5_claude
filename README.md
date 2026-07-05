@@ -27,35 +27,17 @@
 | Komponente | Modell | Protokoll |
 |---|---|---|
 | MCU | Raspberry Pi Pico | — |
-| IMU + Barometer | CJMCU-10DOF | I2C / SPI |
-| IMU | MPU9250 (auf CJMCU-10DOF) | SPI (Phase 3) |
-| IMU | ICM-20948 9-DoF | I2C | 0x?? |
-| Barometer | MS5611 (auf CJMCU-10DOF) | I2C | 0x77 |
+| IMU | ICM-20948 9-DoF | I2C (0x69) |
+| Barometer | MS5611 | I2C (0x77) |
 | Funk | NRF24L01 | SPI (Phase 2) |
 | Bluetooth | HC-06 | UART0 |
 | Motoren | 4x Brushless + ESC | PWM (nativer RP2040 SDK) |
 
  (TDK InvenSense ICM-20948 9-DoF IMU STEMMA QT Qwiic-Schnittstelle für STEM-Projekte)
+ [ICM-20948 -](https://https://www.adafruit.com/product/4554?srsltid=AfmBOoqJgrg_s14cHHcdieMGC8eEnMb_hd-T7yU6SlsRfc3GowI8pXJ1)
 
+> ⚠️ **ICM-20948 I2C-Adresse:** Laut Datenblatt ergibt AD0 → GND die Adresse 0x68. Auf diesem Board meldet sich der Sensor mit AD0 an GND per I2C-Scan aber tatsächlich unter **0x69**. Adresse im Code (`include/sensor/IMU.h`) daher fest auf 0x69 gesetzt statt vom AD0-Pegel abzuleiten.
 
-### CJMCU-10DOF Anschluss
-
-Das CJMCU-10DOF ist ein Kombi-Board mit MPU9250 und MS5611 auf einer Platine.
-
-| CJMCU-10DOF Pin | Pico Pin | Funktion |
-|---|---|---|
-| VCC | 3.3V | Stromversorgung |
-| GND | GND | Masse |
-| SDA | PIN 4 | I2C — MS5611 |
-| SCL | PIN 5 | I2C — MS5611 |
-| PS | 3.3V | Protocol Select → I2C-Modus |
-| NCS | 3.3V | Chip Select → I2C-Modus |
-| SDO/MISO | PIN ? | SPI — MPU9250 (Phase 3) |
-| SDI/MOSI | PIN ? | SPI — MPU9250 (Phase 3) |
-| SCK | PIN ? | SPI — MPU9250 (Phase 3) |
-| CS | PIN ? | Chip Select MPU9250 (Phase 3) |
-
-> ⚠️ **Wichtig:** PS und NCS müssen an 3.3V angeschlossen sein — sonst wird der MS5611 nicht erkannt!
 
 ### HC-06 Bluetooth Anschluss
 
@@ -67,6 +49,8 @@ Das CJMCU-10DOF ist ein Kombi-Board mit MPU9250 und MS5611 auf einer Platine.
 | RX | PIN 0 (TX) | — |
 
 ### Drehrichtungen (X-Konfiguration)
+
+Diagonal gegenüberliegende Motoren drehen gleich (FL/BR im Uhrzeigersinn, FR/BL gegen den Uhrzeigersinn) — das hebt das Reaktionsdrehmoment der Propeller auf, damit die Drohne nicht unkontrolliert um die Hochachse (Yaw) dreht. Am Boden per Motor-Nut-Farbe (schwarz/rot) verifiziert und in Schritt 8 gegen `TEST_MOTORS_SINGLE` geprüft.
 
 ```
       Vorne
@@ -81,12 +65,14 @@ Das CJMCU-10DOF ist ein Kombi-Board mit MPU9250 und MS5611 auf einer Platine.
       Hinten
 ```
 
-| Motor | Pin | Drehrichtung |
-|---|---|---|
-| Front Left (FL) | PIN 11 | CW ↻ |
-| Front Right (FR) | PIN 12 | CCW ↺ |
-| Back Left (BL) | PIN 14 | CCW ↺ |
-| Back Right (BR) | PIN 13 | CW ↻ |
+| Motor | Pin | Drehrichtung | Arm-Farbe | Motor-Nut |
+|---|---|---|---|---|
+| Front Left (FL) | PIN 11 | CW ↻ | rot | schwarz |
+| Front Right (FR) | PIN 12 | CCW ↺ | rot | rot |
+| Back Left (BL) | PIN 14 | CCW ↺ | weiß | rot |
+| Back Right (BR) | PIN 13 | CW ↻ | weiß | schwarz |
+
+> Die Motor-Mixing-Formeln in `MotorMixer::mix()` (`FL = throttle - roll + pitch`, `FR = throttle + roll + pitch`, `BL = throttle - roll - pitch`, `BR = throttle + roll - pitch`) hängen nur von der Position ab, nicht von der Propeller-Drehrichtung — die Drehrichtung selbst wird rein mechanisch durch die ESC-Motor-Verkabelung festgelegt.
 
 ---
 
@@ -98,26 +84,35 @@ Alle Pins zentral in `include/pins.h` — **einzige Wahrheit für alle Pin-Defin
 // Motoren (PWM — nativer RP2040 SDK)
 PIN_MOTOR_FL  = 11    // Front Left
 PIN_MOTOR_FR  = 12    // Front Right
-PIN_MOTOR_BL  = 14    // Back Left
 PIN_MOTOR_BR  = 13    // Back Right
+PIN_MOTOR_BL  = 14    // Back Left
 
-// I2C (MS5611 Barometer)
+// I2C (MS5611 Barometer + ICM-20948 IMU, gemeinsamer Bus)
 PIN_SDA       = 4
 PIN_SCL       = 5
+PIN_IMU_INT   = 3     // ICM-20948 Interrupt (optional, noch ungenutzt)
 
-// SPI (MPU9250 + NRF24) — Phase 3
-PIN_SPI_MOSI  = ?     // noch offen
-PIN_SPI_MISO  = ?     // noch offen
-PIN_SPI_SCK   = ?     // noch offen
-PIN_IMU_CS    = ?     // noch offen
-
-// Radio NRF24 — Phase 2
-PIN_RADIO_CE  = 20
-PIN_RADIO_CSN = 17
+// SPI (NRF24L01) — Phase 2
+PIN_NRF_MOSI  = 19
+PIN_NRF_MISO  = 16
+PIN_NRF_SCK   = 18
+PIN_NRF_CSN   = 17
+PIN_NRF_CE    = 20
+PIN_NRF_INT   = 21
 
 // Bluetooth HC-06 (UART0)
 PIN_BT_TX     = 0
 PIN_BT_RX     = 1
+
+// ── Ultrasonic HC-SR04 ──────────────────────────
+PIN_ULTRASONIC_TRIG1 = 8
+PIN_ULTRASONIC_ECHO1 = 6
+// PIN_ULTRASONIC_TRIG2 = 9  // für späteren Einsatz eines zweiten Sensors reserviert
+// PIN_ULTRASONIC_ECHO2 = 7
+
+// ── Sonstige ────────────────────────────────────
+BUZZER        = 10
+BATTERY       = 26   // ADC0
 ```
 
 ---
@@ -131,7 +126,7 @@ drone_pico/
 ├── include/                ← Alle Header-Dateien (.h)
 │   ├── pins.h              ← Hardware-Pinbelegung (einzige Wahrheit!)
 │   ├── config.h            ← Parameter, Konstanten, Test-Modi
-│   ├── myLogger.h          ← Eigener Logger (basiert auf bakercp/Logger)
+│   ├── myLogger.h          ← Eigener Logger (keine externe Bibliothek)
 │   ├── comm/
 │   │   ├── BluetoothConfig.h
 │   │   └── KeyboardInput.h
@@ -140,7 +135,7 @@ drone_pico/
 │   │   └── PIDController.h
 │   ├── sensor/
 │   │   ├── Barometer.h
-│   │   └── IMU.h           ← Platzhalter für Phase 3
+│   │   └── IMU.h           ← ICM-20948 (Roll/Pitch aktiv, Yaw folgt in Phase 3)
 │   └── storage/
 │       └── Settings.h
 └── src/                    ← Alle Implementierungen (.cpp)
@@ -154,7 +149,7 @@ drone_pico/
     │   └── PIDController.cpp
     ├── sensor/
     │   ├── Barometer.cpp
-    │   └── IMU.cpp         ← Platzhalter für Phase 3
+    │   └── IMU.cpp         ← ICM-20948 (Roll/Pitch aktiv, Yaw folgt in Phase 3)
     └── storage/
         └── Settings.cpp
 ```
@@ -286,12 +281,9 @@ Alle Bibliotheken in `platformio.ini`. **Keine neuen Bibliotheken ohne Rückspra
 
 | Bibliothek | Version | Verwendung |
 |---|---|---|
-| bakercp/Logger | ^1.0.3 | Basis für myLogger |
 | nrf24/RF24 | ^1.4.8 | NRF24L01 Funk (Phase 2) |
-| robtillaart/MS5611 | ^0.3.9 | Barometer |
-| adafruit/Adafruit Unified Sensor | ^1.1.6 | Sensor-Abstraktion |
-| hideakitai/MPU9250 | ^0.4.8 | IMU (Phase 3) |
-| adafruit/Adafruit BusIO | ^1.14.1 | I2C/SPI Abstraktion |
+| robtillaart/MS5611 | ^0.4.0 | Barometer |
+| wollewald/ICM20948_WE | ^1.1.5 | IMU (löst vorherigen MPU9250-Treiber ab) |
 
 **Entfernte Bibliotheken:**
 
@@ -308,27 +300,24 @@ Alle Bibliotheken in `platformio.ini`. **Keine neuen Bibliotheken ohne Rückspra
 ### `platformio.ini`
 
 ```ini
-[env:pico]
-platform = raspberrypi
-board = pico
+[env:rpipico]
+platform = https://github.com/maxgerhardt/platform-raspberrypi.git
+board_build.core = earlephilhower
+board = rpipico
 framework = arduino
-
-monitor_speed = 115200
 upload_protocol = picotool
+monitor_speed = 115200
 
 lib_deps =
-    bakercp/Logger@^1.0.3
     nrf24/RF24@^1.4.8
-    robtillaart/MS5611@^0.3.9
-    adafruit/Adafruit Unified Sensor@^1.1.6
-    hideakitai/MPU9250@^0.4.8
-    adafruit/Adafruit BusIO@^1.14.1
+    robtillaart/MS5611@^0.4.0
+    wollewald/ICM20948_WE@^1.1.5
 
 build_flags =
     -DGLOBAL_DEBUG
 ;   -DLOG_TIMESTAMP
 ;   -D_DEBUG_=VERBOSE
-    -D_DEBUG_=NOTICE
+;   -D_DEBUG_=NOTICE
 ;   -D_DEBUG_=WARNING
 ;   -D_DEBUG_=FATAL
 ```
@@ -353,7 +342,7 @@ build_flags =
 | Kalibrierung | 20 Messungen à 100ms |
 | Genauigkeit (Stillstand) | ± 1 cm |
 | I2C Adresse MS5611 | 0x77 |
-| I2C Adresse MPU9250 | 0x68 |
+| I2C Adresse ICM-20948 | 0x69 (AD0=GND, siehe Hinweis in [Hardware](#hardware)) |
 
 > ℹ️ Der MS5611 ist sehr empfindlich — Handbewegungen in der Nähe beeinflussen die Messung. Im Freien deutlich stabiler als im Innenraum.
 
@@ -389,10 +378,13 @@ Test-Modi in `include/config.h` per `#define` aktivieren.
 **Immer nur einen Test-Modus gleichzeitig!**
 
 ```cpp
-// #define TEST_MOTORS       // Schritt 2: ESC/Motor Test
-// #define TEST_BAROMETER    // Schritt 3: MS5611 Test
-// #define TEST_KEYBOARD     // Schritt 4: Tastatur Test
-// #define TEST_I2C_SCAN     // Diagnose: I2C Bus Scanner
+// #define TEST_MOTORS         // Schritt 2: ESC/Motor Test (alle vier)
+// #define TEST_MOTORS_SINGLE  // Einzelmotor-Test per Index
+// #define TEST_BAROMETER      // Schritt 3: MS5611 Test
+// #define TEST_KEYBOARD       // Schritt 4: Tastatur Test
+// #define TEST_I2C_SCAN       // Diagnose: I2C Bus Scanner
+// #define TEST_IMU            // ICM-20948 Roll/Pitch/Yaw Dauerausgabe
+// #define TEST_ULTRASONIC     // HC-SR04 Distanzmessung
 // Alle auskommentiert = NORMALBETRIEB
 ```
 
@@ -401,6 +393,9 @@ Motortest per Serial-Befehl. **Propeller abnehmen!**
 - `+` → Throttle +50 µs
 - `-` → Throttle -50 µs
 - `s` → STOP
+
+### TEST_MOTORS_SINGLE
+Wie `TEST_MOTORS`, aber steuert nur einen einzelnen Motor per Index an. **Propeller abnehmen!**
 
 ### TEST_BAROMETER
 Barometer-Ausgabe alle 500ms: Höhe, Druck, Temperatur.
@@ -418,8 +413,14 @@ Pfeiltasten-Erkennung + Barometer-Ausgabe.
 
 ### TEST_I2C_SCAN
 Scannt den I2C-Bus:
-- `0x68` → MPU9250 ✅
+- `0x69` → ICM-20948 ✅ (AD0=GND, siehe Hinweis in [Hardware](#hardware))
 - `0x77` → MS5611 ✅
+
+### TEST_IMU
+Kontinuierliche Ausgabe von Roll/Pitch/Yaw sowie Rohwerten des ICM-20948.
+
+### TEST_ULTRASONIC
+Distanzmessung beider HC-SR04-Kanäle im Wechsel.
 
 ### NORMALBETRIEB (alle auskommentiert)
 Vollständiger Regelkreis mit PID-Höhenregelung.
@@ -473,9 +474,11 @@ Verbindung per PuTTY. **Baudrate: 9600**
 | Phase | Inhalt |
 |---|---|
 | 2 | Manuelle Steuerung per NRF24 Fernbedienung |
-| 3 | Lage-Stabilisierung per IMU (MPU9250) |
+| 3 | Yaw-Stabilisierung (Gyro-Integration + Magnetometer, ICM-20948) |
 | 4 | GPS-gestütztes Positions-Halten |
 | 5 | Autonome Flugrouten |
+
+> Roll/Pitch-Lage-Stabilisierung per ICM-20948 läuft bereits im Normalbetrieb (kaskadierte Höhen- + Lage-PID). Phase 3 fehlt nur noch Yaw.
 
 ---
 
@@ -499,6 +502,11 @@ Verbindung per PuTTY. **Baudrate: 9600**
 - 90s Aufwärmzeit vor Kalibrierung
 - Rekalibrierung (`r`) direkt vor dem Armen
 - Für präzise Tests: im Freien testen
+
+### ICM-20948 nicht gefunden / falsche I2C-Adresse
+**Problem:** `[IMU] ERROR: ICM-20948 nicht gefunden!`, obwohl AD0 an GND liegt.
+**Ursache:** Auf diesem Board meldet sich der Sensor mit AD0=GND nicht unter der laut Datenblatt erwarteten 0x68, sondern unter 0x69.
+**Lösung:** `TEST_I2C_SCAN` ausführen und die tatsächlich gefundene Adresse prüfen. Adresse ist in `include/sensor/IMU.h` fest auf 0x69 gesetzt.
 
 ### FastPID — Ungültige Koeffizienten
 **Problem:** FastPID meldet Fehler bei normalen PID-Werten wegen interner Koeffizient-Grenzen.
@@ -533,17 +541,14 @@ Download: https://datasheets.raspberrypi.com/soft/flash_nuke.uf2
 
 ## Test- und Prüfergebnisse
 
-| Arm Color | Motor nut | Position | PIN | Direction |
-|---|---|---|---|---|
-| red |black | FL | 11 | CW |
-| red | red | FR | 12 | CCW |
-|white | red | BL | 14 | CCW |
-|white | black | BR | 13 | CW |
+Motor-Drehrichtung + Arm-Farbe/Motor-Nut siehe [Drehrichtungen (X-Konfiguration)](#drehrichtungen-x-konfiguration).
 
-HC6 Name HC-06 PIN 1234
+| Modul | Board | I2C-Adresse |
+|---|---|---|
+| MS5611 | GY-63 | 0x77 |
+| ICM-20948 | Breakout (AD0 → GND) | 0x69 (siehe Hinweis oben) |
 
-MS5607/MS5611  GY-63 0x77
-MPU9250 GY-91 0x68
+HC-06 Bluetooth Pairing-PIN: `1234`
 
 
 ## Änderungen für den Einsatz den PICO 2W

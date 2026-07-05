@@ -22,7 +22,7 @@
 #define PIN_NRF_SCK 18
 #define PIN_NRF_CSN 17
 #define PIN_NRF_CE 20
-#define PIN_NRF_INT 3
+#define PIN_NRF_INT 21   
 
 // ── Ultrasonic  HC-SR04──────────────────────────
 #define PIN_ULTRASONIC_TRIG1 8

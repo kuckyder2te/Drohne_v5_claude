@@ -17,7 +17,8 @@ public:
     bool  isReady()  const { return _ready; }
 
 private:
-    ICM20948_WE _imu{0x68};
+    // AD0 liegt an GND, meldet sich auf diesem Board aber unter 0x69 (nicht 0x68)
+    ICM20948_WE _imu{0x69};
 
     float _roll   = 0.0f;
     float _pitch  = 0.0f;
