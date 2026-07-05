@@ -51,10 +51,21 @@
 
 ### Drehrichtungen (X-Konfiguration)
 
-Diagonal gegenüberliegende Motoren drehen gleich (FL/BR im Uhrzeigersinn, FR/BL gegen den Uhrzeigersinn) — das hebt das Reaktionsdrehmoment der Propeller auf, damit die Drohne nicht unkontrolliert um die Hochachse (Yaw) dreht. Am Boden per Motor-Nut-Farbe (schwarz/rot) verifiziert und in Schritt 8 gegen `TEST_MOTORS_SINGLE` geprüft.
+Diagonal gegenüberliegende Motoren drehen gleich (FL/BR gegen den Uhrzeigersinn, FR/BL im Uhrzeigersinn) — das hebt das Reaktionsdrehmoment der Propeller auf, damit die Drohne nicht unkontrolliert um die Hochachse (Yaw) dreht. Am Boden per Motor-Nut-Farbe (schwarz/rot) verifiziert und in Schritt 8 gegen `TEST_MOTORS_SINGLE` geprüft.
 
 ```
       Vorne
+  FL(CCW) FR(CW)
+    ↺        ↻
+      \    /
+       \  /
+       /  \
+      /    \
+    ↻        ↺
+  BL(CW)  BR(CCW)
+      Hinten
+```
+     Vorne
   FL(CW)  FR(CCW)
     ↻        ↺
       \    /
@@ -64,18 +75,17 @@ Diagonal gegenüberliegende Motoren drehen gleich (FL/BR im Uhrzeigersinn, FR/BL
     ↺        ↻
   BL(CCW) BR(CW)
       Hinten
-```
 
 | Motor | Pin | Drehrichtung | Arm-Farbe | Motor-Nut |
 |---|---|---|---|---|
-| Front Left (FL) | PIN 11 | CW ↻ | rot | schwarz |
-| Front Right (FR) | PIN 12 | CCW ↺ | rot | rot |
-| Back Left (BL) | PIN 14 | CCW ↺ | weiß | rot |
-| Back Right (BR) | PIN 13 | CW ↻ | weiß | schwarz |
+| Front Left (FL) | PIN 11 | CCW ↺ | rot | schwarz |
+| Front Right (FR) | PIN 12 | CW ↻ | rot | rot |
+| Back Left (BL) | PIN 14 | CW ↻ | weiß | rot |
+| Back Right (BR) | PIN 13 | CCW ↺ | weiß | schwarz |
 
 > Die Motor-Mixing-Formeln in `MotorMixer::mix()` (`FL = throttle - roll + pitch`, `FR = throttle + roll + pitch`, `BL = throttle - roll - pitch`, `BR = throttle + roll - pitch`) hängen nur von der Position ab, nicht von der Propeller-Drehrichtung — die Drehrichtung selbst wird rein mechanisch durch die ESC-Motor-Verkabelung festgelegt.
 
-> ⚠️ **Absolute CW/CCW-Zuordnung ist nicht "die einzig richtige":** Physikalisch zwingend ist nur, dass diagonale Motoren gleich und benachbarte gegensätzlich drehen (Summe Reaktionsdrehmoment = 0). Welche Diagonale konkret CW und welche CCW ist, ist spiegelbildlich beliebig — andere Quellen (z. B. ArduPilot/PX4-Konvention) nennen genau die umgekehrte Zuordnung (FL=CCW/FR=CW/BL=CW/BR=CCW) und haben trotzdem recht. Die obige Tabelle gilt speziell für **dieses** Board (eigener Arm-Farbe-Test), nicht als Allgemeinregel.
+> ⚠️ **Absolute CW/CCW-Zuordnung ist nicht "die einzig richtige":** Physikalisch zwingend ist nur, dass diagonale Motoren gleich und benachbarte gegensätzlich drehen (Summe Reaktionsdrehmoment = 0). Welche Diagonale konkret CW und welche CCW ist, ist spiegelbildlich beliebig — eine frühere Version dieser Tabelle hatte genau die umgekehrte Zuordnung (FL=CW/FR=CCW/BL=CCW/BR=CW) und wäre ebenso gültig gewesen. Die obige Tabelle gilt speziell für **dieses** Board (eigener Arm-Farbe-Test, Stand 2026-07-05), nicht als Allgemeinregel.
 >
 > **Sicherheitskritisch ist stattdessen:** Jeder Motor braucht die zu seiner tatsächlichen (gemessenen) Drehrichtung passende Propeller-Steigung (Normal- vs. Pusher-Prop) — sonst schiebt der Propeller Luft nach oben statt unten. Vor der Propeller-Montage: Motor per `TEST_MOTORS_SINGLE` ohne Last einzeln laufen lassen, Drehrichtung von oben beobachten, dann passenden Prop-Typ montieren. Nicht aus abstrakten Konventionen ableiten.
 
