@@ -54,28 +54,18 @@
 Diagonal gegenüberliegende Motoren drehen gleich (FL/BR gegen den Uhrzeigersinn, FR/BL im Uhrzeigersinn) — das hebt das Reaktionsdrehmoment der Propeller auf, damit die Drohne nicht unkontrolliert um die Hochachse (Yaw) dreht. Am Boden per Motor-Nut-Farbe (schwarz/rot) verifiziert und in Schritt 8 gegen `TEST_MOTORS_SINGLE` geprüft.
 
 ```
- aktuelle Konfiguation
-      Vorne      
-  FL(CCW) FR(CW)
-    ↺        ↻
-      \    /
-       \  /
-       /  \
-      /    \
-    ↻        ↺
-  BL(CW)  BR(CCW)
-      Hinten
+    aktuelle Konfiguation
+                        Vorne                 
+        FL(CCW) FR(CW)           FL(CW)  FR(CCW)
+         ↺        ↻              ↻        ↺       
+          \      /                  \      /
+           \    /                    \    /
+           /    \                    /    \
+          /      \                  /      \
+        ↻        ↺               ↺        ↻
+        BL(CW)  BR(CCW)           BL(CCW) BR(CW)
+                        Hinten                    
 ```
-     Vorne
-  FL(CW)  FR(CCW)
-    ↻        ↺
-      \    /
-       \  /
-       /  \
-      /    \
-    ↺        ↻
-  BL(CCW) BR(CW)
-      Hinten
 
 | Motor | Pin | Drehrichtung | Arm-Farbe | Motor-Nut |
 |---|---|---|---|---|
