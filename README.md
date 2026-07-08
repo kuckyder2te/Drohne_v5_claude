@@ -54,7 +54,8 @@
 Diagonal gegenüberliegende Motoren drehen gleich (FL/BR gegen den Uhrzeigersinn, FR/BL im Uhrzeigersinn) — das hebt das Reaktionsdrehmoment der Propeller auf, damit die Drohne nicht unkontrolliert um die Hochachse (Yaw) dreht. Am Boden per Motor-Nut-Farbe (schwarz/rot) verifiziert und in Schritt 8 gegen `TEST_MOTORS_SINGLE` geprüft.
 
 ```
-      Vorne      aktuelle Konfiguation
+ aktuelle Konfiguation
+      Vorne      
   FL(CCW) FR(CW)
     ↺        ↻
       \    /
@@ -94,7 +95,8 @@ BR(CCW) erzeugt → Drehmoment CW auf Rahmen
 Summe = 0 → Drohne dreht sich nicht! ✅
 
 
-> Die Motor-Mixing-Formeln in `MotorMixer::mix()` (`FL = throttle - roll + pitch`, `FR = throttle + roll + pitch`, `BL = throttle - roll - pitch`, `BR = throttle + roll - pitch`) hängen nur von der Position ab, nicht von der Propeller-Drehrichtung — die Drehrichtung selbst wird rein mechanisch durch die ESC-Motor-Verkabelung festgelegt.
+> Die Motor-Mixing-Formeln in `MotorMixer::mix()` (`FL = throttle - roll + pitch`, `FR = throttle + roll + pitch`, `BL = throttle - roll - pitch`, `BR = throttle + roll - pitch`) hängen nur von der Position ab, nicht von der Propeller-Drehrichtung — die Drehrichtung selbst wird rein mec
+hanisch durch die ESC-Motor-Verkabelung festgelegt.
 
 > ⚠️ **Absolute CW/CCW-Zuordnung ist nicht "die einzig richtige":** Physikalisch zwingend ist nur, dass diagonale Motoren gleich und benachbarte gegensätzlich drehen (Summe Reaktionsdrehmoment = 0). Welche Diagonale konkret CW und welche CCW ist, ist spiegelbildlich beliebig — eine frühere Version dieser Tabelle hatte genau die umgekehrte Zuordnung (FL=CW/FR=CCW/BL=CCW/BR=CW) und wäre ebenso gültig gewesen. Die obige Tabelle gilt speziell für **dieses** Board (eigener Arm-Farbe-Test, Stand 2026-07-05), nicht als Allgemeinregel.
 >
