@@ -19,9 +19,7 @@ PIDController pidHeight(PID_KP_HEIGHT, PID_KI_HEIGHT, PID_KD_HEIGHT, true); // m
 PIDController pidRoll(PID_KP_ROLL, PID_KI_ROLL, PID_KD_ROLL, false);        // ohne Offset
 PIDController pidPitch(PID_KP_PITCH, PID_KI_PITCH, PID_KD_PITCH, false);    // ohne Offset
 
-CommChannel* bt = nullptr;
-CommChannel* serial = nullptr;
-CommChannel* comm = nullptr;   // aktiver Eingabe-/Log-Kanal, siehe setup()
+CommChannel* comm = nullptr;   // aktiver Eingabe-/Log-Kanal, Auswahl per COMM_USE_BLUETOOTH (config.h)
 Settings settings;
 IMU imu;
 
@@ -144,16 +142,16 @@ void disarm()
 // -- Setup --------------------------------------------------
 void setup()
 {
-    Serial.begin(115200);
-    delay(2000);
-
+#ifdef COMM_USE_BLUETOOTH
     Serial1.setTX(PIN_BT_TX);
     Serial1.setRX(PIN_BT_RX);
     Serial1.begin(BT_BAUD);
-
-    serial = new CommChannel(Serial);
-    bt     = new CommChannel(Serial1);
-    comm   = serial;   // aktiver Kanal: bt oder serial (hier umschalten)
+    comm = new CommChannel(Serial1);
+#else
+    Serial.begin(115200);
+    comm = new CommChannel(Serial);
+#endif
+  delay(2000);
 
     comm->sendLine("[BT] Drohne bereit");
     comm->sendLine("[BT] Befehle: A D R L H  +/-");
@@ -553,7 +551,7 @@ void loop()
         lastHeight = h;
     }
 
-    // Eingabe ueber den aktiven Kanal (comm - bt oder serial, siehe setup())
+    // Eingabe ueber den aktiven Kanal (comm; Auswahl per COMM_USE_BLUETOOTH in config.h)
     KeyEvent key = comm->getKey();
     String   cmd = comm->getCommand();
     if (cmd.length() > 0)

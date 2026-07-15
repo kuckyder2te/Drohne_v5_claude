@@ -4,6 +4,10 @@
 #define _SERIAL_LOG
 //#define _BT_LOG
 
+// ── Kommunikationskanal (genau einen aktivieren) ────────────
+// Aktiv: comm nutzt Serial1 (BT-UART). Auskommentiert: comm nutzt Serial (USB).
+//#define COMM_USE_BLUETOOTH
+
 // ── Test-Modi (auskommentieren = deaktiviert) ──────────────
 // #define TEST_MOTORS
 // #define TEST_MOTORS_SINGLE  // ← einzelne Motoren testen
