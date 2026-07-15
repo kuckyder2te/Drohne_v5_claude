@@ -36,7 +36,7 @@ The firmware implements a **cascaded PID altitude + attitude stabilizer** for a 
 
 1. **Sensor update** every loop iteration — barometer, ultrasonic, IMU all polled unconditionally.
 2. **Safety checks** — disarms (`disarm()`) on IMU-not-ready or an altitude jump > 500 cm between consecutive loop iterations.
-3. **Input processing** — Bluetooth (`BluetoothComm`) is the primary input; USB Serial (`SerialInput`) is read as backup only when BT produced no key/command that iteration. Both funnel PID-tuning strings through the same `BluetoothComm::processCommand()`.
+3. **Input processing** — both `bt` and `serial` in `main.cpp` are instances of the same `CommChannel` class wrapping different `Stream`s (BT UART and USB Serial respectively). Bluetooth is the primary input; USB Serial is read as backup only when BT produced no key/command that iteration. Both funnel PID-tuning strings through the same `CommChannel::processCommand()`.
 4. **Arm sequence** — pressing `a` twice within 3 s recalibrates the barometer, resets all three PID controllers, arms, and sets `targetHeightCm = 20`. `d` disarms immediately (motors to `ESC_MIN_US`).
 5. **Height PID** (every `PID_INTERVAL_MS` = 50 ms) — error = `targetHeightCm − currentAltitude`; altitude source is ultrasonic when valid, barometer otherwise. Output includes the `THROTTLE_OFFSET_US` baseline.
 6. **Anti-windup / liftoff gating** — the integral term on all three PID controllers only accumulates once `ultrasonic.isValid() && altitude > LIFTOFF_HEIGHT_CM` (`enableIntegral()`); it's cleared again on landing. This prevents integral windup while sitting on the ground pre-liftoff.
@@ -57,8 +57,7 @@ The firmware implements a **cascaded PID altitude + attitude stabilizer** for a 
 | [src/sensor/Barometer.cpp](src/sensor/Barometer.cpp) | MS5611 (0x77); needs a 90 s warmup + calibration before it's trustworthy; ring-buffer filter; `BARO_TEMP_COEFF` compensates thermal drift |
 | [src/sensor/Ultrasonic.cpp](src/sensor/Ultrasonic.cpp) | HC-SR04 on pins 8/6; valid range ~2–300 cm; preferred altitude source over barometer whenever `isValid()` |
 | [src/sensor/Battery.cpp](src/sensor/Battery.cpp) | ADC pin 26, voltage divider; warns/critical via buzzer pin 10 |
-| [src/comm/SerialInput.cpp](src/comm/SerialInput.cpp) | USB Serial key parser; discards ANSI escape sequences (arrow keys aren't handled reliably here — why BT is the primary input); `+`/`-`/`d` act immediately, other keys need Enter |
-| [src/comm/BluetoothComm.cpp](src/comm/BluetoothComm.cpp) | HC-06 UART (`Serial1`, 9600 baud) key + command parser, and PID tuning command processor: height `P=`/`I=`/`D=`, roll `RP=`/`RI=`/`RD=`, pitch `PP=`/`PI=`/`PD=`, `S`/`SAVE`, `RESET`, `?` query. Single-char commands resolve after a 200 ms timeout (to allow multi-char PID strings to accumulate); multi-char commands terminate on newline. |
+| [src/comm/CommChannel.cpp](src/comm/CommChannel.cpp) | Transport-agnostic key/command parser and PID-tuning command processor. Constructor takes any `Stream&` (used for BT UART `Serial1` and USB `Serial` today; a TCP `Client` would work too, since it also derives from `Stream`). ANSI escape sequences are always discarded; `+`/`-` act immediately; other single-char commands (`A D H R L S ?`) resolve after a 200 ms timeout or on newline (whichever comes first); multi-char strings (`RP=`/`RI=`/`RD=`, `PP=`/`PI=`/`PD=`, height `P=`/`I=`/`D=`, `SAVE`, `RESET`) terminate on newline only. |
 | [src/storage/Settings.cpp](src/storage/Settings.cpp) | EEPROM persistence for height PID Kp/Ki/Kd, validity marker byte |
 
 ### Test Modes
@@ -81,7 +80,7 @@ Defined in [include/config.h](include/config.h). Uncomment exactly one to run th
 - **Ultrasonic preferred over barometer** when in range (2–300 cm) — better accuracy and no warmup requirement.
 - **I2C bus recovery** — sends 9 clock pulses to release a stuck SDA line before every `Wire.begin()`, both in normal operation and in `TEST_I2C_SCAN`.
 - **Integral anti-windup gated on liftoff** (`LIFTOFF_HEIGHT_CM`) — height/roll/pitch integrators stay at zero until the ultrasonic confirms the craft is airborne, and are cleared again on landing.
-- **BT is the primary control input, USB Serial is backup-only** — the USB Serial parser deliberately discards arrow-key escape sequences (unreliable through `pio device monitor`), while BT's 200 ms timeout scheme handles both single keys and multi-char PID strings.
+- **BT is the primary control input, USB Serial is backup-only** — both channels share one `CommChannel` class (parameterized by `Stream&`) with a single unified parsing scheme: ANSI arrow-key escape sequences are always discarded (harmless no-op for BT), single-char commands resolve via a 200 ms timeout so BT apps that don't send Enter still work, and `+`/`-` act instantly on both channels. One consequence: `d` (disarm) is no longer byte-instant on USB Serial like before — it now resolves within ≤200 ms like on BT — because a byte-instant `d`/`D` would break the BT `D=<value>` (height Kd) tuning command the instant the `D` byte is read, before `=<value>` arrives.
 - **Yaw = 0 currently** — gyro-based yaw stabilization deferred to Phase 3; only the complementary-filtered roll/pitch are used for attitude control.
 
 ### Planned Phases (not yet implemented)

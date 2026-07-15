@@ -1,67 +1,55 @@
-#include "comm/BluetoothComm.h"
-#include "myLogger.h"
+#include "comm/CommChannel.h"
 #include "config.h"
-#include "pins.h"
 
-void BluetoothComm::send(const char* msg) {
-    BT_UART.print(msg);
+void CommChannel::send(const char* msg) {
+    _stream.print(msg);
 }
 
-void BluetoothComm::sendLine(const char* msg) {
-    BT_UART.println(msg);
+void CommChannel::sendLine(const char* msg) {
+    _stream.println(msg);
 }
 
-void BluetoothComm::begin() {
-    Serial1.setTX(PIN_BT_TX);
-    Serial1.setRX(PIN_BT_RX);
-    BT_UART.begin(BT_BAUD);
-    sendLine("[BT] Drohne bereit");
-    sendLine("[BT] Befehle: A D R L H  +/-");
-    sendLine("[BT] PID: P=x I=x D=x  RP= RI= RD=  PP= PI= PD=");
-    sendLine("[BT] S=Speichern  RESET  ?=Abfrage");
-    LOG("[BT] Bluetooth bereit");
+KeyEvent CommChannel::resolveSingleChar(char ch) {
+    switch (toupper(ch)) {
+        case 'A': return KeyEvent::KEY_A;
+        case 'D': return KeyEvent::KEY_D;
+        case 'H': return KeyEvent::KEY_H;
+        case 'R': return KeyEvent::KEY_R;
+        case 'L': return KeyEvent::KEY_L;
+        default:  _command = String((char)toupper(ch)); return KeyEvent::NONE;
+    }
 }
 
-KeyEvent BluetoothComm::getKey() {
+KeyEvent CommChannel::getKey() {
     _command = "";
 
-    // Timeout nur fuer Einzelzeichen (200 ms): A, D, H, R, L, +, -, ?, S
-    // Mehrzeichenbefehle (PID-Werte, RESET) werden ausschliesslich per Newline abgeschlossen.
+    // Einzelzeichen ohne Newline: nach 200 ms als Befehl werten (deckt Quellen ohne
+    // Enter ab, z.B. BT-App-Buttons). Mehrzeichenbefehle (PID-Werte, RESET) werden
+    // ausschliesslich per Newline abgeschlossen.
     if (_buffer.length() == 1 && (millis() - _lastCharMs) > 200) {
-        char ch = toupper(_buffer[0]);
-        switch (ch) {
-            case 'A': _buffer = ""; return KeyEvent::KEY_A;
-            case 'D': _buffer = ""; return KeyEvent::KEY_D;
-            case 'H': _buffer = ""; return KeyEvent::KEY_H;
-            case 'R': _buffer = ""; return KeyEvent::KEY_R;
-            case 'L': _buffer = ""; return KeyEvent::KEY_L;
-            case '+': _buffer = ""; return KeyEvent::ARROW_UP;
-            case '-': _buffer = ""; return KeyEvent::ARROW_DOWN;
-            case '?': _buffer = ""; _command = "?"; return KeyEvent::NONE;
-            case 'S': _buffer = ""; _command = "S"; return KeyEvent::NONE;
-            default:  break; // unbekannt: weiter UART lesen
-        }
+        KeyEvent ev = resolveSingleChar(_buffer[0]);
+        _buffer = "";
+        return ev;
     }
 
-    while (BT_UART.available()) {
-        uint8_t c = BT_UART.read();
+    while (_stream.available()) {
+        uint8_t c = _stream.read();
+
+        // ANSI-Escape-Sequenzen verwerfen (z.B. Pfeiltasten ueber Terminal, hier nicht unterstuetzt)
+        if (_escSt == 0 && c == 0x1B) { _escSt = 1; continue; }
+        if (_escSt == 1) { _escSt = (c == '[') ? 2 : 0; continue; }
+        if (_escSt == 2) { _escSt = 0; continue; }
+
+        if (c == '+') { _buffer = ""; return KeyEvent::ARROW_UP; }
+        if (c == '-') { _buffer = ""; return KeyEvent::ARROW_DOWN; }
 
         if (c == '\r' || c == '\n') {
             if (_buffer.length() == 0) continue;
 
             if (_buffer.length() == 1) {
-                char ch = toupper(_buffer[0]);
+                KeyEvent ev = resolveSingleChar(_buffer[0]);
                 _buffer = "";
-                switch (ch) {
-                    case 'A': return KeyEvent::KEY_A;
-                    case 'D': return KeyEvent::KEY_D;
-                    case 'H': return KeyEvent::KEY_H;
-                    case 'R': return KeyEvent::KEY_R;
-                    case 'L': return KeyEvent::KEY_L;
-                    case '+': return KeyEvent::ARROW_UP;
-                    case '-': return KeyEvent::ARROW_DOWN;
-                    default:  _command = String(ch); return KeyEvent::NONE;
-                }
+                return ev;
             } else {
                 _command = _buffer;
                 _buffer = "";
@@ -77,15 +65,11 @@ KeyEvent BluetoothComm::getKey() {
     return KeyEvent::NONE;
 }
 
-String BluetoothComm::getCommand() {
-    return _command;
-}
-
-void BluetoothComm::processCommand(const String &cmd,
-                                   PIDController &pidHeight,
-                                   PIDController &pidRoll,
-                                   PIDController &pidPitch,
-                                   Settings &settings) {
+void CommChannel::processCommand(const String &cmd,
+                                 PIDController &pidHeight,
+                                 PIDController &pidRoll,
+                                 PIDController &pidPitch,
+                                 Settings &settings) {
     if (cmd.length() == 0) return;
 
     if (cmd == "?") {

@@ -1,15 +1,13 @@
 #include "myLogger.h"
 #include "config.h"
-#ifdef _BT_LOG
-#include "comm/BluetoothComm.h"
-extern BluetoothComm bt;
-#endif
+#include "comm/CommChannel.h"
+extern CommChannel* comm;
 
 void dlog(const String& msg) {
 #ifdef _SERIAL_LOG
-    Serial.println(msg);
+    comm->sendLine(msg.c_str());
 #endif
 #ifdef _BT_LOG
-    bt.sendLine(msg.c_str());
+    comm->sendLine(msg.c_str());
 #endif
 }

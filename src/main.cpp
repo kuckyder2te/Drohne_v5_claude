@@ -5,8 +5,7 @@
 #include "control/MotorMixer.h"
 #include "control/PIDController.h"
 #include "sensor/Barometer.h"
-#include "comm/BluetoothComm.h"
-#include "comm/SerialInput.h"
+#include "comm/CommChannel.h"
 #include "storage/Settings.h"
 #include "sensor/IMU.h"
 #include "sensor/Battery.h"
@@ -20,8 +19,9 @@ PIDController pidHeight(PID_KP_HEIGHT, PID_KI_HEIGHT, PID_KD_HEIGHT, true); // m
 PIDController pidRoll(PID_KP_ROLL, PID_KI_ROLL, PID_KD_ROLL, false);        // ohne Offset
 PIDController pidPitch(PID_KP_PITCH, PID_KI_PITCH, PID_KD_PITCH, false);    // ohne Offset
 
-BluetoothComm bt;
-SerialInput serial;
+//CommChannel bt(BT_UART);
+CommChannel serial(Serial);
+CommChannel* comm = &serial;
 Settings settings;
 IMU imu;
 
@@ -147,7 +147,15 @@ void setup()
     Serial.begin(115200);
     delay(2000);
 
-    bt.begin();
+    Serial1.setTX(PIN_BT_TX);
+    Serial1.setRX(PIN_BT_RX);
+    //BT_UART.begin(BT_BAUD);
+    //comm->begin();
+    comm->sendLine("[BT] Drohne bereit");
+    comm->sendLine("[BT] Befehle: A D R L H  +/-");
+    comm->sendLine("[BT] PID: P=x I=x D=x  RP= RI= RD=  PP= PI= PD=");
+    comm->sendLine("[BT] S=Speichern  RESET  ?=Abfrage");
+    LOG("[BT] Bluetooth bereit");
 
     battery.begin();
     ultrasonic.begin();
@@ -468,10 +476,10 @@ void loop()
     // -- TEST_KEYBOARD --------------------------------------
 #ifdef TEST_KEYBOARD
     baro.update();
-    KeyEvent key = bt.getKey();
-    String tkCmd = bt.getCommand();
+    KeyEvent key = comm->getKey();
+    String tkCmd = comm->getCommand();
     if (tkCmd.length() > 0)
-        bt.processCommand(tkCmd, pidHeight, pidRoll, pidPitch, settings);
+        comm->processCommand(tkCmd, pidHeight, pidRoll, pidPitch, settings);
     switch (key)
     {
     case KeyEvent::ARROW_UP:
@@ -542,16 +550,16 @@ void loop()
     }
 
     // BT ist primäre Eingabe, USB Serial nur als Backup
-    KeyEvent key = bt.getKey();
-    String btCmd = bt.getCommand();
+    KeyEvent key = comm->getKey();
+    String btCmd = comm->getCommand();
     if (btCmd.length() > 0)
-        bt.processCommand(btCmd, pidHeight, pidRoll, pidPitch, settings);
+        comm->processCommand(btCmd, pidHeight, pidRoll, pidPitch, settings);
 
     if (key == KeyEvent::NONE && btCmd.length() == 0) {
-        key = serial.getKey();
-        String serCmd = serial.getCommand();
+        key = comm->getKey();
+        String serCmd = comm->getCommand();
         if (serCmd.length() > 0)
-            bt.processCommand(serCmd, pidHeight, pidRoll, pidPitch, settings);
+            comm->processCommand(serCmd, pidHeight, pidRoll, pidPitch, settings);
     }
 
     switch (key)
