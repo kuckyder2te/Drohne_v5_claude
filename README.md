@@ -11,13 +11,15 @@
 1. [Hardware](#hardware)
 2. [Pinbelegung](#pinbelegung)
 3. [Projektstruktur](#projektstruktur)
-4. [Bibliotheken](#bibliotheken)
-5. [Konfiguration](#konfiguration)
-6. [Test-Modi](#test-modi)
-7. [Bluetooth-Befehle](#bluetooth-befehle)
-8. [Entwicklungsstand](#entwicklungsstand)
-9. [Bekannte Probleme & Lösungen](#bekannte-probleme--lösungen)
-10. [Entwicklungsregeln](#entwicklungsregeln)
+4. [Klassendiagramm](#klassendiagramm)
+5. [Bibliotheken](#bibliotheken)
+6. [Konfiguration](#konfiguration)
+7. [Test-Modi](#test-modi)
+8. [Bluetooth-Befehle](#bluetooth-befehle)
+9. [Entwicklungsstand](#entwicklungsstand)
+10. [Bekannte Probleme & Lösungen](#bekannte-probleme--lösungen)
+11. [Entwicklungsregeln](#entwicklungsregeln)
+12. [Sicherheit & Handhabung](#sicherheit--handhabung)
 
 ---
 
@@ -26,31 +28,17 @@
 | Komponente | Modell | Protokoll |
 |---|---|---|
 | MCU | Raspberry Pi Pico | — |
-| IMU + Barometer | CJMCU-10DOF | I2C / SPI |
-| IMU | MPU9250 (auf CJMCU-10DOF) | SPI (Phase 3) |
-| Barometer | MS5611 (auf CJMCU-10DOF) | I2C |
+| IMU | ICM-20948 9-DoF | I2C (0x69) |
+| Barometer | MS5611 | I2C (0x77) |
 | Funk | NRF24L01 | SPI (Phase 2) |
 | Bluetooth | HC-06 | UART0 |
 | Motoren | 4x Brushless + ESC | PWM (nativer RP2040 SDK) |
 
-### CJMCU-10DOF Anschluss
+ (TDK InvenSense ICM-20948 9-DoF IMU STEMMA QT Qwiic-Schnittstelle für STEM-Projekte)
+ [ICM-20948 -](https://https://www.adafruit.com/product/4554?srsltid=AfmBOoqJgrg_s14cHHcdieMGC8eEnMb_hd-T7yU6SlsRfc3GowI8pXJ1)
 
-Das CJMCU-10DOF ist ein Kombi-Board mit MPU9250 und MS5611 auf einer Platine.
+> ⚠️ **ICM-20948 I2C-Adresse:** Laut Datenblatt ergibt AD0 → GND die Adresse 0x68. Auf diesem Board meldet sich der Sensor mit AD0 an GND per I2C-Scan aber tatsächlich unter **0x69**. Adresse im Code (`include/sensor/IMU.h`) daher fest auf 0x69 gesetzt statt vom AD0-Pegel abzuleiten.
 
-| CJMCU-10DOF Pin | Pico Pin | Funktion |
-|---|---|---|
-| VCC | 3.3V | Stromversorgung |
-| GND | GND | Masse |
-| SDA | PIN 4 | I2C — MS5611 |
-| SCL | PIN 5 | I2C — MS5611 |
-| PS | 3.3V | Protocol Select → I2C-Modus |
-| NCS | 3.3V | Chip Select → I2C-Modus |
-| SDO/MISO | PIN ? | SPI — MPU9250 (Phase 3) |
-| SDI/MOSI | PIN ? | SPI — MPU9250 (Phase 3) |
-| SCK | PIN ? | SPI — MPU9250 (Phase 3) |
-| CS | PIN ? | Chip Select MPU9250 (Phase 3) |
-
-> ⚠️ **Wichtig:** PS und NCS müssen an 3.3V angeschlossen sein — sonst wird der MS5611 nicht erkannt!
 
 ### HC-06 Bluetooth Anschluss
 
@@ -63,25 +51,46 @@ Das CJMCU-10DOF ist ein Kombi-Board mit MPU9250 und MS5611 auf einer Platine.
 
 ### Drehrichtungen (X-Konfiguration)
 
+Diagonal gegenüberliegende Motoren drehen gleich (FL/BR gegen den Uhrzeigersinn, FR/BL im Uhrzeigersinn) — das hebt das Reaktionsdrehmoment der Propeller auf, damit die Drohne nicht unkontrolliert um die Hochachse (Yaw) dreht. Am Boden per Motor-Nut-Farbe (schwarz/rot) verifiziert und in Schritt 8 gegen `TEST_MOTORS_SINGLE` geprüft.
+
 ```
-      Vorne
-  FL(CW)  FR(CCW)
-    ↻        ↺
-      \    /
-       \  /
-       /  \
-      /    \
-    ↺        ↻
-  BL(CCW) BR(CW)
-      Hinten
+    aktuelle Konfiguation
+                        Vorne                 
+        FL(CCW) FR(CW)           FL(CW)  FR(CCW)
+         ↺        ↻              ↻        ↺       
+          \      /                  \      /
+           \    /                    \    /
+           /    \                    /    \
+          /      \                  /      \
+        ↻        ↺               ↺        ↻
+        BL(CW)  BR(CCW)           BL(CCW) BR(CW)
+                        Hinten                    
 ```
 
-| Motor | Pin | Drehrichtung |
-|---|---|---|
-| Front Left (FL) | PIN 11 | CW ↻ |
-| Front Right (FR) | PIN 12 | CCW ↺ |
-| Back Left (BL) | PIN 14 | CCW ↺ |
-| Back Right (BR) | PIN 13 | CW ↻ |
+| Motor | Pin | Drehrichtung | Arm-Farbe | Motor-Nut |
+|---|---|---|---|---|
+| Front Left (FL) | PIN 11 | CCW ↺ | rot | schwarz |
+| Front Right (FR) | PIN 12 | CW ↻ | rot | rot |
+| Back Left (BL) | PIN 14 | CW ↻ | weiß | rot |
+| Back Right (BR) | PIN 13 | CCW ↺ | weiß | schwarz |
+
+Physikalisches Prinzip — Drehmoment:
+
+Jeder rotierende Motor erzeugt ein Gegendrehmoment auf den Rahmen:
+FL(CCW) erzeugt → Drehmoment CW auf Rahmen
+FR(CW)  erzeugt → Drehmoment CCW auf Rahmen
+BL(CW)  erzeugt → Drehmoment CCW auf Rahmen
+BR(CCW) erzeugt → Drehmoment CW auf Rahmen
+
+Summe = 0 → Drohne dreht sich nicht! ✅
+
+
+> Die Motor-Mixing-Formeln in `MotorMixer::mix()` (`FL = throttle - roll + pitch`, `FR = throttle + roll + pitch`, `BL = throttle - roll - pitch`, `BR = throttle + roll - pitch`) hängen nur von der Position ab, nicht von der Propeller-Drehrichtung — die Drehrichtung selbst wird rein mec
+hanisch durch die ESC-Motor-Verkabelung festgelegt.
+
+> ⚠️ **Absolute CW/CCW-Zuordnung ist nicht "die einzig richtige":** Physikalisch zwingend ist nur, dass diagonale Motoren gleich und benachbarte gegensätzlich drehen (Summe Reaktionsdrehmoment = 0). Welche Diagonale konkret CW und welche CCW ist, ist spiegelbildlich beliebig — eine frühere Version dieser Tabelle hatte genau die umgekehrte Zuordnung (FL=CW/FR=CCW/BL=CCW/BR=CW) und wäre ebenso gültig gewesen. Die obige Tabelle gilt speziell für **dieses** Board (eigener Arm-Farbe-Test, Stand 2026-07-05), nicht als Allgemeinregel.
+>
+> **Sicherheitskritisch ist stattdessen:** Jeder Motor braucht die zu seiner tatsächlichen (gemessenen) Drehrichtung passende Propeller-Steigung (Normal- vs. Pusher-Prop) — sonst schiebt der Propeller Luft nach oben statt unten. Vor der Propeller-Montage: Motor per `TEST_MOTORS_SINGLE` ohne Last einzeln laufen lassen, Drehrichtung von oben beobachten, dann passenden Prop-Typ montieren. Nicht aus abstrakten Konventionen ableiten.
 
 ---
 
@@ -93,26 +102,35 @@ Alle Pins zentral in `include/pins.h` — **einzige Wahrheit für alle Pin-Defin
 // Motoren (PWM — nativer RP2040 SDK)
 PIN_MOTOR_FL  = 11    // Front Left
 PIN_MOTOR_FR  = 12    // Front Right
-PIN_MOTOR_BL  = 14    // Back Left
 PIN_MOTOR_BR  = 13    // Back Right
+PIN_MOTOR_BL  = 14    // Back Left
 
-// I2C (MS5611 Barometer)
+// I2C (MS5611 Barometer + ICM-20948 IMU, gemeinsamer Bus)
 PIN_SDA       = 4
 PIN_SCL       = 5
+PIN_IMU_INT   = 3     // ICM-20948 Interrupt (optional, noch ungenutzt)
 
-// SPI (MPU9250 + NRF24) — Phase 3
-PIN_SPI_MOSI  = ?     // noch offen
-PIN_SPI_MISO  = ?     // noch offen
-PIN_SPI_SCK   = ?     // noch offen
-PIN_IMU_CS    = ?     // noch offen
-
-// Radio NRF24 — Phase 2
-PIN_RADIO_CE  = 20
-PIN_RADIO_CSN = 17
+// SPI (NRF24L01) — Phase 2
+PIN_NRF_MOSI  = 19
+PIN_NRF_MISO  = 16
+PIN_NRF_SCK   = 18
+PIN_NRF_CSN   = 17
+PIN_NRF_CE    = 20
+PIN_NRF_INT   = 21
 
 // Bluetooth HC-06 (UART0)
 PIN_BT_TX     = 0
 PIN_BT_RX     = 1
+
+// ── Ultrasonic HC-SR04 ──────────────────────────
+PIN_ULTRASONIC_TRIG1 = 8
+PIN_ULTRASONIC_ECHO1 = 6
+// PIN_ULTRASONIC_TRIG2 = 9  // für späteren Einsatz eines zweiten Sensors reserviert
+// PIN_ULTRASONIC_ECHO2 = 7
+
+// ── Sonstige ────────────────────────────────────
+BUZZER        = 10
+BATTERY       = 26   // ADC0
 ```
 
 ---
@@ -126,7 +144,7 @@ drone_pico/
 ├── include/                ← Alle Header-Dateien (.h)
 │   ├── pins.h              ← Hardware-Pinbelegung (einzige Wahrheit!)
 │   ├── config.h            ← Parameter, Konstanten, Test-Modi
-│   ├── myLogger.h          ← Eigener Logger (basiert auf bakercp/Logger)
+│   ├── myLogger.h          ← Eigener Logger (keine externe Bibliothek)
 │   ├── comm/
 │   │   ├── BluetoothConfig.h
 │   │   └── KeyboardInput.h
@@ -135,7 +153,7 @@ drone_pico/
 │   │   └── PIDController.h
 │   ├── sensor/
 │   │   ├── Barometer.h
-│   │   └── IMU.h           ← Platzhalter für Phase 3
+│   │   └── IMU.h           ← ICM-20948 (Roll/Pitch aktiv, Yaw folgt in Phase 3)
 │   └── storage/
 │       └── Settings.h
 └── src/                    ← Alle Implementierungen (.cpp)
@@ -149,12 +167,129 @@ drone_pico/
     │   └── PIDController.cpp
     ├── sensor/
     │   ├── Barometer.cpp
-    │   └── IMU.cpp         ← Platzhalter für Phase 3
+    │   └── IMU.cpp         ← ICM-20948 (Roll/Pitch aktiv, Yaw folgt in Phase 3)
     └── storage/
         └── Settings.cpp
 ```
 
 > **Konvention:** `.h` in `include/`, `.cpp` in `src/`. PlatformIO findet Header automatisch.
+
+---
+
+## Klassendiagramm
+
+```mermaid
+classDiagram
+    class MotorMixer {
+        -uint16_t _fl
+        -uint16_t _fr
+        -uint16_t _bl
+        -uint16_t _br
+        +begin()
+        +setThrottle(throttle_us)
+        +mix(throttle, roll, pitch, yaw)
+        +setSingle(motor, throttle)
+        +stop()
+    }
+
+    class PIDController {
+        -float _kp
+        -float _ki
+        -float _kd
+        -float _integral
+        -bool _useOffset
+        +PIDController(kp, ki, kd, useOffset)
+        +compute(setpoint, measured) float
+        +reset()
+        +setKp(kp)
+        +setKi(ki)
+        +setKd(kd)
+        +getKp() float
+        +getKi() float
+        +getKd() float
+    }
+
+    class IMU {
+        -float _roll
+        -float _pitch
+        -float _yaw
+        -bool _ready
+        +begin(initWire) bool
+        +update() bool
+        +calibrate()
+        +getRoll() float
+        +getPitch() float
+        +getYaw() float
+        +isReady() bool
+    }
+
+    class Barometer {
+        -float _altitudeCm
+        -float _pressure
+        -float _temperature
+        -float _refPressure
+        +begin() bool
+        +update()
+        +calibrate()
+        +getAltitudeCm() float
+        +getPressure() float
+        +getTemperature() float
+    }
+
+    class Ultrasonic {
+        -float _altitudeCm
+        -bool _valid
+        +begin()
+        +update()
+        +getAltitudeCm() float
+        +isValid() bool
+    }
+
+    class Battery {
+        -float _voltage
+        +begin()
+        +update()
+        +getVoltage() float
+        +isWarning() bool
+        +isCritical() bool
+    }
+
+    class KeyboardInput {
+        -uint8_t _escState
+        -String _btBuffer
+        +begin()
+        +getKey() KeyEvent
+        +getBTCommand() String
+    }
+
+    class KeyEvent {
+        <<enumeration>>
+        NONE
+        ARROW_UP
+        ARROW_DOWN
+        KEY_A
+        KEY_S
+        KEY_H
+        KEY_R
+    }
+
+    class BluetoothConfig {
+        +begin()
+        +processCommand(cmd, pidHeight, pidRoll, pidPitch, settings)
+        +update(pidHeight, pidRoll, pidPitch, settings)
+    }
+
+    class Settings {
+        +begin()
+        +save(kp, ki, kd)
+        +load(kp, ki, kd) bool
+        +reset()
+    }
+
+    KeyboardInput --> KeyEvent : liefert
+    BluetoothConfig ..> PIDController : stimmt ab
+    BluetoothConfig ..> Settings : speichert in
+```
 
 ---
 
@@ -164,12 +299,9 @@ Alle Bibliotheken in `platformio.ini`. **Keine neuen Bibliotheken ohne Rückspra
 
 | Bibliothek | Version | Verwendung |
 |---|---|---|
-| bakercp/Logger | ^1.0.3 | Basis für myLogger |
 | nrf24/RF24 | ^1.4.8 | NRF24L01 Funk (Phase 2) |
-| robtillaart/MS5611 | ^0.3.9 | Barometer |
-| adafruit/Adafruit Unified Sensor | ^1.1.6 | Sensor-Abstraktion |
-| hideakitai/MPU9250 | ^0.4.8 | IMU (Phase 3) |
-| adafruit/Adafruit BusIO | ^1.14.1 | I2C/SPI Abstraktion |
+| robtillaart/MS5611 | ^0.4.0 | Barometer |
+| wollewald/ICM20948_WE | ^1.1.5 | IMU (löst vorherigen MPU9250-Treiber ab) |
 
 **Entfernte Bibliotheken:**
 
@@ -186,27 +318,24 @@ Alle Bibliotheken in `platformio.ini`. **Keine neuen Bibliotheken ohne Rückspra
 ### `platformio.ini`
 
 ```ini
-[env:pico]
-platform = raspberrypi
-board = pico
+[env:rpipico]
+platform = https://github.com/maxgerhardt/platform-raspberrypi.git
+board_build.core = earlephilhower
+board = rpipico
 framework = arduino
-
-monitor_speed = 115200
 upload_protocol = picotool
+monitor_speed = 115200
 
 lib_deps =
-    bakercp/Logger@^1.0.3
     nrf24/RF24@^1.4.8
-    robtillaart/MS5611@^0.3.9
-    adafruit/Adafruit Unified Sensor@^1.1.6
-    hideakitai/MPU9250@^0.4.8
-    adafruit/Adafruit BusIO@^1.14.1
+    robtillaart/MS5611@^0.4.0
+    wollewald/ICM20948_WE@^1.1.5
 
 build_flags =
     -DGLOBAL_DEBUG
 ;   -DLOG_TIMESTAMP
 ;   -D_DEBUG_=VERBOSE
-    -D_DEBUG_=NOTICE
+;   -D_DEBUG_=NOTICE
 ;   -D_DEBUG_=WARNING
 ;   -D_DEBUG_=FATAL
 ```
@@ -231,7 +360,7 @@ build_flags =
 | Kalibrierung | 20 Messungen à 100ms |
 | Genauigkeit (Stillstand) | ± 1 cm |
 | I2C Adresse MS5611 | 0x77 |
-| I2C Adresse MPU9250 | 0x68 |
+| I2C Adresse ICM-20948 | 0x69 (AD0=GND, siehe Hinweis in [Hardware](#hardware)) |
 
 > ℹ️ Der MS5611 ist sehr empfindlich — Handbewegungen in der Nähe beeinflussen die Messung. Im Freien deutlich stabiler als im Innenraum.
 
@@ -267,10 +396,13 @@ Test-Modi in `include/config.h` per `#define` aktivieren.
 **Immer nur einen Test-Modus gleichzeitig!**
 
 ```cpp
-// #define TEST_MOTORS       // Schritt 2: ESC/Motor Test
-// #define TEST_BAROMETER    // Schritt 3: MS5611 Test
-// #define TEST_KEYBOARD     // Schritt 4: Tastatur Test
-// #define TEST_I2C_SCAN     // Diagnose: I2C Bus Scanner
+// #define TEST_MOTORS         // Schritt 2: ESC/Motor Test (alle vier)
+// #define TEST_MOTORS_SINGLE  // Einzelmotor-Test per Index
+// #define TEST_BAROMETER      // Schritt 3: MS5611 Test
+// #define TEST_KEYBOARD       // Schritt 4: Tastatur Test
+// #define TEST_I2C_SCAN       // Diagnose: I2C Bus Scanner
+// #define TEST_IMU            // ICM-20948 Roll/Pitch/Yaw Dauerausgabe
+// #define TEST_ULTRASONIC     // HC-SR04 Distanzmessung
 // Alle auskommentiert = NORMALBETRIEB
 ```
 
@@ -279,6 +411,9 @@ Motortest per Serial-Befehl. **Propeller abnehmen!**
 - `+` → Throttle +50 µs
 - `-` → Throttle -50 µs
 - `s` → STOP
+
+### TEST_MOTORS_SINGLE
+Wie `TEST_MOTORS`, aber steuert nur einen einzelnen Motor per Index an. **Propeller abnehmen!**
 
 ### TEST_BAROMETER
 Barometer-Ausgabe alle 500ms: Höhe, Druck, Temperatur.
@@ -296,8 +431,14 @@ Pfeiltasten-Erkennung + Barometer-Ausgabe.
 
 ### TEST_I2C_SCAN
 Scannt den I2C-Bus:
-- `0x68` → MPU9250 ✅
+- `0x69` → ICM-20948 ✅ (AD0=GND, siehe Hinweis in [Hardware](#hardware))
 - `0x77` → MS5611 ✅
+
+### TEST_IMU
+Kontinuierliche Ausgabe von Roll/Pitch/Yaw sowie Rohwerten des ICM-20948.
+
+### TEST_ULTRASONIC
+Distanzmessung beider HC-SR04-Kanäle im Wechsel.
 
 ### NORMALBETRIEB (alle auskommentiert)
 Vollständiger Regelkreis mit PID-Höhenregelung.
@@ -351,9 +492,11 @@ Verbindung per PuTTY. **Baudrate: 9600**
 | Phase | Inhalt |
 |---|---|
 | 2 | Manuelle Steuerung per NRF24 Fernbedienung |
-| 3 | Lage-Stabilisierung per IMU (MPU9250) |
+| 3 | Yaw-Stabilisierung (Gyro-Integration + Magnetometer, ICM-20948) |
 | 4 | GPS-gestütztes Positions-Halten |
 | 5 | Autonome Flugrouten |
+
+> Roll/Pitch-Lage-Stabilisierung per ICM-20948 läuft bereits im Normalbetrieb (kaskadierte Höhen- + Lage-PID). Phase 3 fehlt nur noch Yaw.
 
 ---
 
@@ -377,6 +520,11 @@ Verbindung per PuTTY. **Baudrate: 9600**
 - 90s Aufwärmzeit vor Kalibrierung
 - Rekalibrierung (`r`) direkt vor dem Armen
 - Für präzise Tests: im Freien testen
+
+### ICM-20948 nicht gefunden / falsche I2C-Adresse
+**Problem:** `[IMU] ERROR: ICM-20948 nicht gefunden!`, obwohl AD0 an GND liegt.
+**Ursache:** Auf diesem Board meldet sich der Sensor mit AD0=GND nicht unter der laut Datenblatt erwarteten 0x68, sondern unter 0x69.
+**Lösung:** `TEST_I2C_SCAN` ausführen und die tatsächlich gefundene Adresse prüfen. Adresse ist in `include/sensor/IMU.h` fest auf 0x69 gesetzt.
 
 ### FastPID — Ungültige Koeffizienten
 **Problem:** FastPID meldet Fehler bei normalen PID-Werten wegen interner Koeffizient-Grenzen.
@@ -409,19 +557,61 @@ Download: https://datasheets.raspberrypi.com/soft/flash_nuke.uf2
 
 ---
 
+## Sicherheit & Handhabung
+
+### ESD-Schutz & Komponentenhandhabung
+
+Besonders gefährdete Bauteile:
+
+| Komponente | Empfindlichkeit |
+|---|---|
+| RP2040 (Pico) | Sehr hoch — CMOS-Prozessor |
+| ICM-20948 / IMU | Hoch — MEMS-Struktur |
+| MS5611 | Hoch — Drucksensor-Membran |
+| MOSFETs in ESCs | Mittel-hoch |
+
+Maßnahmen (Priorität):
+1. **Antistatik-Armband** beim Arbeiten tragen
+2. Antistatik-Arbeitsmatte (~10–15 €) empfohlen
+3. Ersatz-Platinen in **antistatischen Tüten** lagern
+4. Vor dem Anfassen: kurz geerdetes Metallteil berühren (Heizung, PC-Gehäuse)
+5. **USB-Kabel ziehen**, bevor am Board gearbeitet wird
+6. Lötreihenfolge: zuerst GND, zuletzt VCC
+7. I2C-Kabel **niemals** im laufenden Betrieb stecken → Chip-Schaden möglich
+
+> **Erfahrung aus diesem Projekt:** Drei IMU-Boards (MPU9250) wurden durch ESD zerstört, bevor auf ICM-20948 mit konsequentem ESD-Schutz umgestellt wurde.
+
+### Ein-/Ausschalten — Reihenfolge & Hinweise
+
+**Einschalten:**
+1. Drohne **ruhig hinlegen** — IMU kalibriert Gyro-Offsets beim Start
+2. **Akku anschließen** → ESCs piepen (Initialisierung abwarten)
+3. **~30–90 s warten** — Barometer-Aufwärmzeit; erst danach `a` (ARM)
+4. USB optional danach für Serial-Monitor
+
+**Ausschalten:**
+1. **`s` drücken** (DISARM) — Motoren auf Minimum
+2. Erst danach Akku trennen
+3. Nie unter Last trennen — Lichtbogen schadet Kontakten und ESCs
+
+**ESD beim Stecken:**
+- Stecker immer am Gehäuse anfassen, nie an Pins
+- XT60-Stecker zügig verbinden (langsames Stecken → Lichtbogen)
+- **Anti-Spark-Widerstand** am XT60 empfehlenswert (~2 €)
+- I2C-Kabel (IMU, MS5611) niemals im laufenden Betrieb stecken
+
+---
+
 ## Test- und Prüfergebnisse
 
+Motor-Drehrichtung + Arm-Farbe/Motor-Nut siehe [Drehrichtungen (X-Konfiguration)](#drehrichtungen-x-konfiguration).
 
-## Test- und Prüfergebnisse
+| Modul | Board | I2C-Adresse |
+|---|---|---|
+| MS5611 | GY-63 | 0x77 |
+| ICM-20948 | Breakout (AD0 → GND) | 0x69 (siehe Hinweis oben) |
 
-| Arm Color | Motor nut | Position | PIN | Direction |
-|---|---|---|---|---|
-| red |black | FL | 11 | CW |
-| red | red | FR | 12 | CCW |
-|white | red | BL | 14 | CCW |
-|white | black | BR | 13 | CW |
-
-HC6 Name HC-06 PIN 1234
+HC-06 Bluetooth Pairing-PIN: `1234`
 
 
 ## Änderungen für den Einsatz den PICO 2W
@@ -429,3 +619,6 @@ HC6 Name HC-06 PIN 1234
 3. Windows Long Path aktivieren — wichtig für den Earle Philhower Core!
 Im Terminal als Administrator:
 reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f
+
+## Links
+Pico: https://datacapturecontrol.com/articles/io-devices/microcontrollers/rpi-pico

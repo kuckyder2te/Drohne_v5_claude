@@ -1,0 +1,90 @@
+=~=~=~=~=~=~=~=~=~=~=~= PuTTY log 2026.05.19 13:36:22 =~=~=~=~=~=~=~=~=~=~=~=
+=== DROHNE PICO BOOT ====
+>> Modus: NORMALBETRIEB
+[BARO] MS5611(MS5607) gefunden
+[BARO] Aufwaermzeit 30s...
+[BARO] Noch 30 s...
+[BARO] Noch 20 s...
+[BARO] Noch 10 s...
+[BARO] Warte auf thermische Stabilisierung...
+[BARO] Temp: 40.3 C | Stabil: 1/10
+[BARO] Temp: 40.3 C | Stabil: 2/10
+[BARO] Temp: 40.4 C | Stabil: 3/10
+[BARO] Temp: 40.4 C | Stabil: 4/10
+[BARO] Temp: 40.5 C | Stabil: 5/10
+[BARO] Temp: 40.5 C | Stabil: 6/10
+[BARO] Temp: 40.5 C | Stabil: 7/10
+[BARO] Temp: 40.6 C | Stabil: 8/10
+[BARO] Temp: 40.6 C | Stabil: 9/10
+[BARO] Temp: 40.7 C | Stabil: 10/10
+[BARO] Temperatur stabil!
+[BARO] Kalibrierung laeuft...
+[BARO] Referenzdruck: 1004.27 hPa
+[MOTOR] Throttle: 1000 µs
+[MOTOR] STOP
+[MOTOR] ESC Initialisierung abgeschlossen
+[PID] Reset
+[PID] Regler initialisiert (eigene Implementierung)
+[PID] Kp=2.0000
+[PID] Ki=0.0300
+[PID] Kd=0.3000
+[EEPROM] Initialisiert
+[EEPROM] Keine gültigen Daten  Standardwerte
+[IMU] WHO_AM_I: 0x70
+[IMU] MPU9250 bereit
+
+ Pfeil hoch   = Zielhoehe +10 cm
+ Pfeil runter = Zielhoehe -10 cm
+ a = ARM (Motoren ein)
+ s = DISARM (Motoren aus)
+ r = Barometer rekalibrieren
+ h = Hilfe
+
+[CTRL] Bereit  'a' zum Armen
+[CTRL] Ziel: 0.0 cm | Ist: -58.1 cm | Throttle: 1000 us | Armed: NEIN | Bat: 11.50V
+[CTRL] Ziel: 0.0 cm | Ist: -725.6 cm | Throttle: 1000 us | Armed: NEIN | Bat: 11.50V
+[CTRL] Ziel: 0.0 cm | Ist: -568.5 cm | Throttle: 1000 us | Armed: NEIN | Bat: 11.50V
+[CTRL] Ziel: 0.0 cm | Ist: -480.5 cm | Throttle: 1000 us | Armed: NEIN | Bat: 11.50V
+[CTRL] Ziel: 0.0 cm | Ist: -424.2 cm | Throttle: 1000 us | Armed: NEIN | Bat: 11.51V
+[CTRL] Ziel: 0.0 cm | Ist: -380.5 cm | Throttle: 1000 us | Armed: NEIN | Baat: 11.51V
+[CTRL] Ziel: 0.0 cm | Ist: -352.0 cm | Throttle: 1000 us | Armed: NEIN | Bat: 11.51V
+[CTRL] Ziel: 0.0 cm | Ist: -
+324.4 cm | Throttle: 1000 us | Armed: NEIN | Bat: 11.51V
+[CTRL] Rekalibrierung vor ARM...
+[BARO] Kalibrierung laeuft...
+[BARO] Referenzdruck: 1004.31 hPa
+[PID] Reset
+[PID] Reset
+[PID] Reset
+[CTRL] ARM  Ziel: 20 cm
+[CTRL] Ziel: 20.0 cm | Ist: 1.7 cm | Throttle: 1289 us | Armed: JA | Bat: 11.51V
+[CTRL] Ziel: 20.0 cm | Ist: -587.5 cm | Throttle: 2000 us | Armed: JA | Bat: 11.50V
+[CTRL] Ziel: 20.0 cm | Ist: -471.5 cm | Throttle: 2000 us | Armed: JA | Bat: 11.50V
+[CTRL] Ziel: 20.0 cm | Ist: -383.3 cm | Throttle: 1973 us | Armed: JA | Bat: 11.46V
+[CTRL] Ziel: 20.0 cm | Ist: -372.5 cm | Throttle: 1952 us | Armed: JA | Bat: 11.45V
+[CTRL] Ziel: 20.0 cm | Ist: -343.2 cm | Throttle: 1900 us | Armed: JA | Bat: 11.45V
+[CTRL] Ziel: 20.0 cm | Ist: -340.6 cm | Throttle: 1952 us | Armed: JA | Bat: 11.46V
+[CTRL] Ziel: 20.0 cm | Ist: -343.2 cm | Throttle: 1969 us | Armed: JA | Bat: 11.46V
+[CTRL] Ziel: 20.0 cm | Ist: -349.0 cm | Throttle: 2000 us | Armed: JA | Bat: 11.45V
+[CTRL] Ziel: 20.0 cm | Ist: -322.1 cm | Throttle: 1972 us | Armed: JA | Bat: 11.45V
+[CTRL] Ziel: 20.0 cm | Ist: -328.8 cm | Throttle: 1921 us | Armed: JA | Bat: 11.45V
+[CTRL] Ziel: 20.0 cm | Ist: -292.8 cm | Throttle: 1833 us | Armed: JA | Bat: 11.45V
+[CTRL] Ziel: 20.0 cm | Ist: -290.2 cm | Throttle: 1877 us | Armed: JA | Bat: 11.46V
+[CTRL] Ziel: 20.0 cm | Ist: -323.8 cm | Throttle: 1965 us | Armed: JA | Bat: 11.46V
+[CTRL] Ziel: 20.0 cm | Ist: -324.7 cm | Throttle: 1985 us | Armed: JA | Bat: 11.44V
+[CTRL] Ziel: 20.0 cm | Ist: -317.9 cm | Throttle: 1964 us | Armed: JA | Bat: 11.44V
+[CTRL] Ziel: 20.0 cm | Ist: -298.5 cm | Throttle: 1852 us | Armed: JA | Bat: 11.43V
+[CTRL] Ziel: 20.0 cm | Ist: -296.9 cm | Throttle: 2000 us | Armed: JA | Bat: 11.47V
+[CTRL] Ziel: 20.0 cm | Ist: -295.9 cm | Throttle: 1825 us | Armed: JA | Bat: 11.47V
+[CTRL] Ziel: 20.0 cm | Ist: -343.0 cm | Throttle: 1919 us | Armed: JA | Bat: 11.44V
+s[CTRL] Ziel: 20.0 cm | Ist: -307.9 cm | Throttle: 1926 us | Armed: JA | Bat: 11.44V
+[CTRL] Ziel: 20.0 cm | Ist: -289.4 cm | Throttle: 1799 us | Armed: JA | Bat: 11.43V
+
+[CTRL] Ziel: 20.0 cm | Ist: -269.3 cm | Throttle: 1724 us | Armed: JA | Bat: 11.43V
+[MOTOR] Throttle: 1000 µs
+[MOTOR] STOP
+[PID] Reset
+[PID] Reset
+[PID] Reset
+[CTRL] DISARM  Motoren gestoppt
+[CTRL] Ziel: 0.0 cm | Ist: -78.6 cm | Throttle: 1724 us | Armed: NEIN | Bat: 11.48V
