@@ -6,6 +6,7 @@
 #include "control/PIDController.h"
 #include "sensor/Barometer.h"
 #include "comm/CommChannel.h"
+#include "comm/cli.h"
 #include "storage/Settings.h"
 #include "sensor/IMU.h"
 #include "sensor/Battery.h"
@@ -147,16 +148,22 @@ void setup()
     Serial1.setRX(PIN_BT_RX);
     Serial1.begin(BT_BAUD);
     comm = new CommChannel(Serial1);
+    
 #else
     Serial.begin(115200);
     comm = new CommChannel(Serial);
+    cli::begin(Serial);
 #endif
+    Serial.begin(115200);
+    cli::begin(Serial);
+
   delay(2000);
 
     comm->sendLine("[BT] Drohne bereit");
     comm->sendLine("[BT] Befehle: A D R L H  +/-");
     comm->sendLine("[BT] PID: P=x I=x D=x  RP= RI= RD=  PP= PI= PD=");
     comm->sendLine("[BT] S=Speichern  RESET  ?=Abfrage");
+    comm->sendLine("[CLI] Neu: ':' + Zeile fuer Shell-Befehle, z.B. :setHeight 30  (:help fuer Liste)");
     LOG("[BT] Bluetooth bereit");
 
     battery.begin();
@@ -278,6 +285,7 @@ void setup()
 // -- Loop ---------------------------------------------------
 void loop()
 {
+    cli::update();
     battery.update();
 
 // -- TEST_ULTRASONIC ------------------------------------
@@ -554,8 +562,8 @@ void loop()
     // Eingabe ueber den aktiven Kanal (comm; Auswahl per COMM_USE_BLUETOOTH in config.h)
     KeyEvent key = comm->getKey();
     String   cmd = comm->getCommand();
-    if (cmd.length() > 0)
-        comm->processCommand(cmd, pidHeight, pidRoll, pidPitch, settings);
+        if (cmd.length() > 0)
+            comm->processCommand(cmd, pidHeight, pidRoll, pidPitch, settings);
 
     switch (key)
     {

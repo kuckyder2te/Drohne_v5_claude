@@ -6,7 +6,7 @@
 
 // ── Kommunikationskanal (genau einen aktivieren) ────────────
 // Aktiv: comm nutzt Serial1 (BT-UART). Auskommentiert: comm nutzt Serial (USB).
-//#define COMM_USE_BLUETOOTH
+#define COMM_USE_BLUETOOTH
 
 // ── Test-Modi (auskommentieren = deaktiviert) ──────────────
 // #define TEST_MOTORS
