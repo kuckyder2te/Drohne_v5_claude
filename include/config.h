@@ -8,7 +8,15 @@
 // Aktiv: comm nutzt Serial1 (BT-UART). Auskommentiert: comm nutzt Serial (USB).
 #define COMM_USE_BLUETOOTH
 
-// ── Test-Modi (auskommentieren = deaktiviert) ──────────────
+// ── Betriebsmodus ────────────────────────────────────────────
+// Hauptschalter: aktiv (Standard) = Normalbetrieb, alle Testmodi
+// unten werden automatisch deaktiviert - unabhaengig davon, ob
+// versehentlich einer von ihnen auch einkommentiert ist. Zum
+// Testen: hier auskommentieren und genau einen TEST_*-Schalter
+// aktivieren.
+#define NORMALBETRIEB
+
+// ── Test-Modi (nur wirksam wenn NORMALBETRIEB oben auskommentiert ist) ──
 // #define TEST_MOTORS
 // #define TEST_MOTORS_SINGLE  // ← einzelne Motoren testen
 // #define TEST_BAROMETER
@@ -16,6 +24,16 @@
 // #define TEST_I2C_SCAN
 // #define TEST_IMU
 // #define TEST_ULTRASONIC
+
+#ifdef NORMALBETRIEB
+    #undef TEST_MOTORS
+    #undef TEST_MOTORS_SINGLE
+    #undef TEST_BAROMETER
+    #undef TEST_KEYBOARD
+    #undef TEST_I2C_SCAN
+    #undef TEST_IMU
+    #undef TEST_ULTRASONIC
+#endif
 
 // Temperaturkompensation: Druckkorrektur pro °C Temperaturdifferenz
 // Empirisch ermittelt für MS5607 Sensor
