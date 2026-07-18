@@ -22,7 +22,7 @@ pio run --target upload && pio device monitor
 
 There is no automated test suite — validation happens via the hardware test modes below plus manual bench/flight testing (see README.md "Ein-/Ausschalten" for the arm/disarm power-on procedure).
 
-Build flags in `platformio.ini`: `-DGLOBAL_DEBUG` is always on. Test modes are enabled by uncommenting exactly one `#define` in [include/config.h](include/config.h); leave all commented for normal flight operation.
+Build flags in `platformio.ini`: `-DGLOBAL_DEBUG` is always on. `NORMALBETRIEB` in [include/config.h](include/config.h) is the master switch: while defined (default) it force-`#undef`s all `TEST_*` macros, so normal flight operation is active regardless of what's left uncommented below it. To run a test mode, comment out `NORMALBETRIEB` and uncomment exactly one `TEST_*` `#define`.
 
 Logging is controlled by two flags consumed in [include/myLogger.h](include/myLogger.h): `_SERIAL_LOG` (USB Serial) and `_BT_LOG` (Bluetooth). Use `LOG(msg)` and `LOG_FMT(fmt, ...)` — they route to both outputs simultaneously when enabled.
 
@@ -62,7 +62,7 @@ The firmware implements a **cascaded PID altitude + attitude stabilizer** for a 
 
 ### Test Modes
 
-Defined in [include/config.h](include/config.h). Uncomment exactly one to run that test; leave all commented for normal flight operation:
+Defined in [include/config.h](include/config.h), gated by the `NORMALBETRIEB` master switch (see Build System above). With `NORMALBETRIEB` commented out, uncomment exactly one to run that test:
 
 - `TEST_MOTORS` — all four motors together, plus an ESC-calibration sub-sequence (`c`/`k`/`m`)
 - `TEST_MOTORS_SINGLE` — drive one motor by index (`1`=FL, `2`=FR, `3`=BR, `4`=BL)
