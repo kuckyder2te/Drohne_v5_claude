@@ -28,7 +28,8 @@
       "PowerShell(try { Stop-Process -Id 10128 -Force -ErrorAction Stop; Write-Output \"PID 10128 beendet\" } catch { Write-Output \"Konnte PID 10128 nicht beenden: $_\" }; Start-Sleep -Milliseconds 800)",
       "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\python.exe\" \".claude\\\\skills\\\\serial-cli-test\\\\height_test.py\" 2>&1)",
       "Bash(~/.platformio/penv/Scripts/python.exe -c \"import serial.tools.list_ports as p; [print\\(x.device, x.hwid\\) for x in p.comports\\(\\)]\")",
-      "Bash(~/.platformio/penv/Scripts/python.exe \".claude/skills/serial-cli-test/height_test.py\")"
+      "Bash(~/.platformio/penv/Scripts/python.exe \".claude/skills/serial-cli-test/height_test.py\")",
+      "PowerShell(& \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\python.exe\" \".\\\\.claude\\\\skills\\\\serial-cli-test\\\\height_test.py\")"
     ]
   }
 }
