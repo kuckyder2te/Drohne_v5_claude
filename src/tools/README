@@ -1,0 +1,32 @@
+Eigenstaendige Hardware-Testtools: je ein Unterordner mit eigenem
+setup()/loop(), das ueber lib/ die passenden Treiber-Module (MotorMixer, IMU,
+Barometer, Ultrasonic, Battery) wiederverwendet, aber nichts aus dem restlichen
+src/ (insbesondere nicht main.cpp/NormalMode) mitkompiliert.
+
+Jedes Tool ist eine eigene PlatformIO-Umgebung in platformio.ini
+([env:test_<name>]) und wird per build_src_filter isoliert gebaut:
+build_src_filter = -<*> +<tools/test_<name>/> laesst genau diesen Tool-Ordner
+uebrig; lib/ wird automatisch mitgelinkt. Die Firmware-Umgebung [env:rpipico]
+schliesst umgekehrt tools/ aus (build_src_filter = +<*> -<tools/>), und
+"default_envs = rpipico" sorgt dafuer, dass ein blankes "pio run" nur die
+Firmware baut.
+
+Vorhandene Tools:
+  test_motors/           Alle vier Motoren + ESC-Kalibrierung (frueher TEST_MOTORS)
+  test_motors_single/    Ein Motor per Index 1-4  (frueher TEST_MOTORS_SINGLE)
+  test_barometer/        Druck/Hoehe/Temperatur    (frueher TEST_BAROMETER)
+  test_imu/              Roll/Pitch/AccZ           (frueher TEST_IMU)
+  test_ultrasonic/       HC-SR04 Distanz           (frueher TEST_ULTRASONIC)
+  test_i2c_scan/         I2C-Bus-Scan alle 5s      (frueher TEST_I2C_SCAN)
+
+Bauen/Flashen eines Tools, z.B. test_imu:
+  pio run -e test_imu --target upload
+  pio device monitor
+
+Alternativ: PlatformIO-Sidebar in VS Code -> Project Tasks -> gewuenschte
+test_<name>-Umgebung -> Upload.
+
+Das fruehere in-Firmware TEST_KEYBOARD (Tastatur-/CLI-Eingabe) hat kein eigenes
+Tool: es haengt eng an CommChannel/PIDController/Settings (im restlichen src/)
+und laesst sich nicht sinnvoll isolieren - die Tastatur-/PID-Tuning-Eingabe
+testet der Normalbetrieb der eigentlichen Firmware.

@@ -10,7 +10,12 @@
       "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" test -e rpipico -f test_keyboard --without-testing 2>&1 | Select-Object -Last 30)",
       "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" test -e rpipico -f test_keyboard --without-testing --without-uploading 2>&1 | Select-Object -Last 30)",
       "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" test -e rpipico -f test_barometer --without-testing --without-uploading 2>&1 | Select-Object -Last 20)",
-      "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" test -e rpipico -f test_keyboard --without-testing --without-uploading 2>&1 | Select-Object -Last 20)"
+      "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" test -e rpipico -f test_keyboard --without-testing --without-uploading 2>&1 | Select-Object -Last 20)",
+      "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run -e test_barometer 2>&1 | Select-Object -Last 25)",
+      "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run -e test_i2c_scan 2>&1 | Select-Object -Last 6; Write-Output \"===== MOTORS =====\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run -e test_motors 2>&1 | Select-Object -Last 6)",
+      "Bash(grep -n \"pio test\\\\|test_build_src\\\\|test/test_\\\\|\\\\[test/\\\\]\\\\|test/\\)\\\\|\\(test/\\\\|test/ tree\\\\|test/README\\\\|standalone tools under \\\\`test/\\\\`\\\\|under \\\\[test/\\\\]\\\\|test/<name>\\\\|-f <name>\\\\|-f test\" CLAUDE.md)",
+      "Bash(grep -n \"pio test\\\\|test_build_src\\\\|test/test_\\\\|under \\\\`test/\\\\`\\\\|\\\\[test/\\\\]\" CLAUDE.md)",
+      "Bash(grep -rn \"]\\(test/\\\\|under \\\\`test/\\\\`\\\\|the \\\\`test/\\\\`\\\\|\\\\`test/README\\\\`\\\\|siehe \\\\`test/README\\\\`\" --include=\"*.md\" .)"
     ]
   }
 }

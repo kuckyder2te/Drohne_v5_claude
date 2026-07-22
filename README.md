@@ -392,16 +392,18 @@ PID-Werte werden im Flash gespeichert und beim Start automatisch geladen.
 
 ## Test-Tools
 
-Die Hardware-Testwerkzeuge sind **eigenständige Programme unter `test/`** (kein
-`config.h`-Schalter mehr). Jedes hat sein eigenes `setup()`/`loop()` und wird
-isoliert gebaut/geflasht:
+Die Hardware-Testwerkzeuge sind **eigenständige Programme unter `src/tools/`**
+(kein `config.h`-Schalter mehr). Jedes hat sein eigenes `setup()`/`loop()` und
+ist eine eigene PlatformIO-Umgebung (`[env:test_<name>]`), die per
+`build_src_filter` isoliert gebaut/geflasht wird:
 
 ```bash
-pio test -e rpipico -f <name> --without-testing
+pio run -e <name> --target upload
 pio device monitor
 ```
 
-**Immer nur ein Tool gleichzeitig flashen.** Details siehe `test/README`.
+Ein blankes `pio run` baut nur die Firmware (`default_envs = rpipico`).
+**Immer nur ein Tool gleichzeitig flashen.** Details siehe `src/tools/README`.
 
 ### test_motors
 Motortest per Befehl über BT-UART. **Propeller abnehmen!**

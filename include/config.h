@@ -10,9 +10,9 @@
 
 // ── Betriebsmodus ────────────────────────────────────────────
 // Die Firmware kennt nur noch den Normalbetrieb (Flugbetrieb, siehe
-// src/mode/NormalMode.cpp). Alle Hardware-Testwerkzeuge - inkl. des frueheren
-// TEST_KEYBOARD - sind eigenstaendige PlatformIO-Testumgebungen unter test/
-// (siehe test/README, z.B. "pio test -e rpipico -f test_imu --without-testing").
+// src/mode/NormalMode.cpp). Alle Hardware-Testwerkzeuge sind eigenstaendige
+// PlatformIO-Umgebungen unter src/tools/ (siehe src/tools/README, z.B.
+// "pio run -e test_imu --target upload").
 
 // Temperaturkompensation: Druckkorrektur pro °C Temperaturdifferenz
 // Empirisch ermittelt für MS5607 Sensor
