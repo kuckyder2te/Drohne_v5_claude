@@ -15,7 +15,20 @@
       "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run -e test_i2c_scan 2>&1 | Select-Object -Last 6; Write-Output \"===== MOTORS =====\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run -e test_motors 2>&1 | Select-Object -Last 6)",
       "Bash(grep -n \"pio test\\\\|test_build_src\\\\|test/test_\\\\|\\\\[test/\\\\]\\\\|test/\\)\\\\|\\(test/\\\\|test/ tree\\\\|test/README\\\\|standalone tools under \\\\`test/\\\\`\\\\|under \\\\[test/\\\\]\\\\|test/<name>\\\\|-f <name>\\\\|-f test\" CLAUDE.md)",
       "Bash(grep -n \"pio test\\\\|test_build_src\\\\|test/test_\\\\|under \\\\`test/\\\\`\\\\|\\\\[test/\\\\]\" CLAUDE.md)",
-      "Bash(grep -rn \"]\\(test/\\\\|under \\\\`test/\\\\`\\\\|the \\\\`test/\\\\`\\\\|\\\\`test/README\\\\`\\\\|siehe \\\\`test/README\\\\`\" --include=\"*.md\" .)"
+      "Bash(grep -rn \"]\\(test/\\\\|under \\\\`test/\\\\`\\\\|the \\\\`test/\\\\`\\\\|\\\\`test/README\\\\`\\\\|siehe \\\\`test/README\\\\`\" --include=\"*.md\" .)",
+      "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" device list 2>&1 | Select-Object -First 40)",
+      "PowerShell(& \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\python.exe\" -c \"import serial; print\\('pyserial', serial.__version__\\)\" 2>&1)",
+      "PowerShell(& \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\python.exe\" \"C:\\\\Users\\\\willy\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\h--hobby-Projekte-Drohne-VS-Code-Drohne-v5-Claude\\\\a7de7993-7973-42bb-9f6f-31efe059af51\\\\scratchpad\\\\probe.py\" 2>&1)",
+      "PowerShell(Get-Process | Where-Object { $_.ProcessName -match 'putty|platformio|pio|python|monitor|Code|teraterm|realterm|arduino' } | Select-Object ProcessName, Id, MainWindowTitle | Format-Table -AutoSize)",
+      "PowerShell(try { Stop-Process -Id 6928 -Force -ErrorAction Stop; Write-Output \"PID 6928 beendet\" } catch { Write-Output \"Konnte PID 6928 nicht beenden: $_\" }; Start-Sleep -Milliseconds 800; Get-Process -Id 6928 -ErrorAction SilentlyContinue | Select-Object ProcessName,Id)",
+      "PowerShell(& \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\python.exe\" \"C:\\\\Users\\\\willy\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\h--hobby-Projekte-Drohne-VS-Code-Drohne-v5-Claude\\\\a7de7993-7973-42bb-9f6f-31efe059af51\\\\scratchpad\\\\cli.py\" 2>&1)",
+      "PowerShell(& \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\python.exe\" \"C:\\\\Users\\\\willy\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\h--hobby-Projekte-Drohne-VS-Code-Drohne-v5-Claude\\\\a7de7993-7973-42bb-9f6f-31efe059af51\\\\scratchpad\\\\experiment.py\" 2>&1)",
+      "Edit(/.claude/skills/serial-cli-test/**)",
+      "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\python.exe\" \".claude\\\\skills\\\\serial-cli-test\\\\height_test.py\" --port COM11 -8 20 90 140 2>&1)",
+      "PowerShell(try { Stop-Process -Id 10128 -Force -ErrorAction Stop; Write-Output \"PID 10128 beendet\" } catch { Write-Output \"Konnte PID 10128 nicht beenden: $_\" }; Start-Sleep -Milliseconds 800)",
+      "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\python.exe\" \".claude\\\\skills\\\\serial-cli-test\\\\height_test.py\" 2>&1)",
+      "Bash(~/.platformio/penv/Scripts/python.exe -c \"import serial.tools.list_ports as p; [print\\(x.device, x.hwid\\) for x in p.comports\\(\\)]\")",
+      "Bash(~/.platformio/penv/Scripts/python.exe \".claude/skills/serial-cli-test/height_test.py\")"
     ]
   }
 }
