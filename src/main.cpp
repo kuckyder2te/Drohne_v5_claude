@@ -3,6 +3,9 @@
 #include "config.h"
 #include "pins.h"
 #include "control/FlightController.h"
+#include "control/Mode.h"
+#include "mode/NormalMode.h"
+#include "mode/KeyboardTestMode.h"
 #include "Barometer.h"
 #include "comm/CommChannel.h"
 #include "comm/cli.h"
@@ -10,8 +13,6 @@
 #include "IMU.h"
 #include "Battery.h"
 #include "Ultrasonic.h"
-#include "testmode/TestModes.h"
-#include "control/InputHandler.h"
 
 Barometer baro;
 Battery battery;
@@ -21,6 +22,13 @@ FlightController flightController;
 CommChannel* comm = nullptr;   // aktiver Eingabe-/Log-Kanal, Auswahl per COMM_USE_BLUETOOTH (config.h)
 Settings settings;
 IMU imu;
+
+#ifdef NORMALBETRIEB
+NormalMode modeInstance;
+#else
+KeyboardTestMode modeInstance;
+#endif
+Mode* activeMode = &modeInstance;   // aktiver Betriebsmodus, Auswahl per NORMALBETRIEB (config.h)
 
 // -- Setup --------------------------------------------------
 void setup()
@@ -53,36 +61,7 @@ void setup()
 
     LOG("=== DROHNE PICO BOOT ====");
 
-    TestModes::setup();
-
-#ifdef NORMALBETRIEB
-    LOG(">> Modus: NORMALBETRIEB");
-
-    Wire.setSDA(PIN_SDA);
-    Wire.setSCL(PIN_SCL);
-    Wire.begin();
-
-    if (!baro.begin())
-    {
-        LOG("FEHLER: Barometer! Programm gestoppt.");
-        while (true)
-            delay(1000);
-    }
-
-    ultrasonic.begin();
-    flightController.begin(settings);
-
-    battery.begin();
-
-    if (!imu.begin(false))
-    {
-        LOG("WARNUNG: IMU nicht gefunden!");
-    }
-
-    comm->printHelp();
-    LOG("[CTRL] Bereit - 'a' zum Armen");
-
-#endif // NORMALBETRIEB
+    activeMode->setup();
 }
 
 // -- Loop ---------------------------------------------------
@@ -91,25 +70,5 @@ void loop()
     cli::update();
     battery.update();
 
-    TestModes::loop();
-
-    // -- NORMALBETRIEB --------------------------------------
-#ifdef NORMALBETRIEB
-
-    baro.update();
-    ultrasonic.update();
-    imu.update();
-
-    // Bei IMU Fehler oder Höhensprung → sofort DISARM
-    flightController.checkSafety(imu.isReady(), baro.getAltitudeCm());
-
-    InputHandler::handle();
-
-    // PID-Regelkreis
-    flightController.updateControlLoop(ultrasonic, baro, imu);
-
-    // Statusausgabe alle 500ms
-    flightController.logStatus(battery, baro, ultrasonic);
-
-#endif // NORMALBETRIEB
+    activeMode->loop();
 }

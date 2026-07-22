@@ -1,24 +1,21 @@
-#include "testmode/TestModes.h"
+#include "mode/KeyboardTestMode.h"
 
 #include <Arduino.h>
 #include "myLogger.h"
 #include "config.h"
-#include "pins.h"
 #include "control/FlightController.h"
 #include "Barometer.h"
 #include "comm/CommChannel.h"
 #include "storage/Settings.h"
 
-// Zugriff auf die main.cpp-Globalen wie in src/comm/cli.cpp
-// (extern float targetHeightCm;) / src/myLogger.cpp ueber extern-Globale.
+// Zugriff auf die main.cpp-Globalen, wie in InputHandler.cpp/NormalMode.cpp.
 extern Barometer baro;
 extern FlightController flightController;
 extern CommChannel* comm;
 extern Settings settings;
 
-void TestModes::setup()
+void KeyboardTestMode::setup()
 {
-#ifdef TEST_KEYBOARD
     LOG(">> Modus: KEYBOARD TEST");
     if (!baro.begin())
     {
@@ -27,13 +24,10 @@ void TestModes::setup()
             delay(1000);
     }
     comm->printHelp();
-#endif
 }
 
-void TestModes::loop()
+void KeyboardTestMode::loop()
 {
-    // -- TEST_KEYBOARD --------------------------------------
-#ifdef TEST_KEYBOARD
     baro.update();
     KeyEvent key = comm->getKey();
     String tkCmd = comm->getCommand();
@@ -68,5 +62,4 @@ void TestModes::loop()
         lastPrint = millis();
         LOG_FMT("[BARO] Hoehe: %.1f cm", baro.getAltitudeCm());
     }
-#endif
 }

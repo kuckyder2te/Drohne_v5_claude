@@ -10,7 +10,7 @@
 #include "storage/Settings.h"
 
 // Zugriff auf die main.cpp-Globalen wie in src/comm/cli.cpp
-// (extern float targetHeightCm;) / src/testmode/TestModes.cpp ueber extern-Globale.
+// (extern float targetHeightCm;) / src/mode/KeyboardTestMode.cpp ueber extern-Globale.
 extern CommChannel* comm;
 extern FlightController flightController;
 extern Settings settings;
