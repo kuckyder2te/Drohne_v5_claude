@@ -1,12 +1,13 @@
 #include "comm/cli.h"
 #include "config.h"
 #include "myLogger.h"
+#include "control/FlightController.h"
 #include <SimpleSerialShell.h>
 
 // Reine C-Funktionszeiger (SimpleSerialShell::CommandFunction) koennen
 // keinen Zustand einfangen - Zugriff auf das main.cpp-Ziel daher wie in
 // myLogger.cpp (extern CommChannel* comm;) ueber ein extern-Global.
-extern float targetHeightCm;
+extern FlightController flightController;
 
 namespace {
     Stream  *cliStream = nullptr;
@@ -24,14 +25,13 @@ namespace {
             return -1;
         }
         float v = strtof(argv[1], nullptr);
-        targetHeightCm = constrain(v, THROTTLE_MIN_CM, MAX_HEIGHT_CM);
-        LOG_FMT("[CTRL] Zielhoehe: %.1f cm", targetHeightCm);
+        flightController.setTargetHeightCm(v);
         return 0;
     }
 
     int cmdGetHeight(int /*argc*/, char ** /*argv*/) {
         shell.print(F("targetHeightCm="));
-        shell.println(targetHeightCm);
+        shell.println(flightController.getTargetHeightCm());
         return 0;
     }
 }

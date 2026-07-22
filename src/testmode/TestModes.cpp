@@ -4,7 +4,7 @@
 #include "myLogger.h"
 #include "config.h"
 #include "pins.h"
-#include "control/PIDController.h"
+#include "control/FlightController.h"
 #include "Barometer.h"
 #include "comm/CommChannel.h"
 #include "storage/Settings.h"
@@ -12,12 +12,9 @@
 // Zugriff auf die main.cpp-Globalen wie in src/comm/cli.cpp
 // (extern float targetHeightCm;) / src/myLogger.cpp ueber extern-Globale.
 extern Barometer baro;
-extern PIDController pidHeight;
-extern PIDController pidRoll;
-extern PIDController pidPitch;
+extern FlightController flightController;
 extern CommChannel* comm;
 extern Settings settings;
-void printHelp(); // bleibt in main.cpp (auch vom Normalbetrieb genutzt)
 
 void TestModes::setup()
 {
@@ -29,7 +26,7 @@ void TestModes::setup()
         while (true)
             delay(1000);
     }
-    printHelp();
+    comm->printHelp();
 #endif
 }
 
@@ -41,7 +38,7 @@ void TestModes::loop()
     KeyEvent key = comm->getKey();
     String tkCmd = comm->getCommand();
     if (tkCmd.length() > 0)
-        comm->processCommand(tkCmd, pidHeight, pidRoll, pidPitch, settings);
+        comm->processCommand(tkCmd, flightController.getPidHeight(), flightController.getPidRoll(), flightController.getPidPitch(), settings);
     switch (key)
     {
     case KeyEvent::ARROW_UP:
@@ -57,7 +54,7 @@ void TestModes::loop()
         baro.calibrate();
         break;
     case KeyEvent::KEY_H:
-        printHelp();
+        comm->printHelp();
         break;
     case KeyEvent::KEY_A:
         LOG("[KEY] ARM - nur im Normalbetrieb");

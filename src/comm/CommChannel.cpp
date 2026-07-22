@@ -9,6 +9,20 @@ void CommChannel::sendLine(const char* msg) {
     _stream.println(msg);
 }
 
+void CommChannel::printHelp() {
+    sendLine("------------------------------------");
+    sendLine(" a   = ARM (2x bestaetigen)");
+    sendLine(" d   = DISARM (sofort)");
+    sendLine(" +/- = Hoehe +/-10 cm (sofort)");
+    sendLine(" r   = Baro rekalibrieren");
+    sendLine(" l   = Statuslog ein/aus");
+    sendLine(" h   = Hilfe");
+    sendLine(" ?   = PID-Werte anzeigen");
+    sendLine(" PID: P=x.x  I=x.x  D=x.x");
+    sendLine(" SAVE / RESET");
+    sendLine("------------------------------------");
+}
+
 KeyEvent CommChannel::resolveSingleChar(char ch) {
     switch (toupper(ch)) {
         case 'A': return KeyEvent::KEY_A;

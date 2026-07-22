@@ -2,8 +2,7 @@
 #include "myLogger.h"
 #include "config.h"
 #include "pins.h"
-#include "MotorMixer.h"
-#include "control/PIDController.h"
+#include "control/FlightController.h"
 #include "Barometer.h"
 #include "comm/CommChannel.h"
 #include "comm/cli.h"
@@ -14,54 +13,14 @@
 #include "testmode/TestModes.h"
 #include "control/InputHandler.h"
 
-MotorMixer motors;
 Barometer baro;
 Battery battery;
 Ultrasonic ultrasonic;
-PIDController pidHeight(PID_KP_HEIGHT, PID_KI_HEIGHT, PID_KD_HEIGHT, true); // mit Offset
-PIDController pidRoll(PID_KP_ROLL, PID_KI_ROLL, PID_KD_ROLL, false);        // ohne Offset
-PIDController pidPitch(PID_KP_PITCH, PID_KI_PITCH, PID_KD_PITCH, false);    // ohne Offset
+FlightController flightController;
 
 CommChannel* comm = nullptr;   // aktiver Eingabe-/Log-Kanal, Auswahl per COMM_USE_BLUETOOTH (config.h)
 Settings settings;
 IMU imu;
-
-// -- Zustandsvariablen --------------------------------------
-float targetHeightCm = 0.0f;
-bool armed = false;
-bool statusLogEnabled = false;
-bool armPending = false;
-uint32_t armPendingMs = 0;
-uint32_t lastPidMs = 0;
-uint32_t lastPrintMs = 0;
-
-// -- Hilfsfunktionen ----------------------------------------
-void printHelp()
-{
-    LOG("------------------------------------");
-    LOG(" a   = ARM (2x bestaetigen)");
-    LOG(" d   = DISARM (sofort)");
-    LOG(" +/- = Hoehe +/-10 cm (sofort)");
-    LOG(" r   = Baro rekalibrieren");
-    LOG(" l   = Statuslog ein/aus");
-    LOG(" h   = Hilfe");
-    LOG(" ?   = PID-Werte anzeigen");
-    LOG(" PID: P=x.x  I=x.x  D=x.x");
-    LOG(" SAVE / RESET");
-    LOG("------------------------------------");
-}
-
-void disarm()
-{
-    armed = false;
-    targetHeightCm = 0.0f;
-    motors.stop();
-    pidHeight.reset();
-    pidRoll.reset();
-    pidPitch.reset();
-    LOG("[CTRL] DISARM - Motoren gestoppt");
-}
-
 
 // -- Setup --------------------------------------------------
 void setup()
@@ -71,7 +30,7 @@ void setup()
     Serial1.setRX(PIN_BT_RX);
     Serial1.begin(BT_BAUD);
     comm = new CommChannel(Serial1);
-    
+
 #else
     Serial.begin(115200);
     comm = new CommChannel(Serial);
@@ -92,10 +51,6 @@ void setup()
     battery.begin();
     ultrasonic.begin();
 
-    pidHeight.begin();
-    pidRoll.begin();
-    pidPitch.begin();
-
     LOG("=== DROHNE PICO BOOT ====");
 
     TestModes::setup();
@@ -115,17 +70,7 @@ void setup()
     }
 
     ultrasonic.begin();
-    motors.begin();
-    pidHeight.begin();
-
-    settings.begin();
-    float kp, ki, kd;
-    if (settings.load(kp, ki, kd))
-    {
-        pidHeight.setKp(kp);
-        pidHeight.setKi(ki);
-        pidHeight.setKd(kd);
-    }
+    flightController.begin(settings);
 
     battery.begin();
 
@@ -134,7 +79,7 @@ void setup()
         LOG("WARNUNG: IMU nicht gefunden!");
     }
 
-    printHelp();
+    comm->printHelp();
     LOG("[CTRL] Bereit - 'a' zum Armen");
 
 #endif // NORMALBETRIEB
@@ -156,57 +101,15 @@ void loop()
     imu.update();
 
     // Bei IMU Fehler oder Höhensprung → sofort DISARM
-    if (armed)
-    {
-        if (!imu.isReady())
-        {
-            LOG("[SAFETY] IMU Fehler - DISARM!");
-            disarm();
-        }
-        static float lastHeight = 0;
-        float h = baro.getAltitudeCm();
-        if (abs(h - lastHeight) > 500.0f)
-        {
-            LOG("[SAFETY] Hoehensprung - DISARM!");
-            disarm();
-        }
-        lastHeight = h;
-    }
+    flightController.checkSafety(imu.isReady(), baro.getAltitudeCm());
 
     InputHandler::handle();
 
     // PID-Regelkreis
-    if (armed && (millis() - lastPidMs >= PID_INTERVAL_MS))
-    {
-        lastPidMs = millis();
-
-        bool airborne = ultrasonic.isValid() &&
-                        (ultrasonic.getAltitudeCm() > LIFTOFF_HEIGHT_CM);
-        pidHeight.enableIntegral(airborne);
-        pidRoll.enableIntegral(airborne);
-        pidPitch.enableIntegral(airborne);
-
-        float currentHeight = ultrasonic.isValid() ? ultrasonic.getAltitudeCm() : baro.getAltitudeCm();
-        float throttle = pidHeight.compute(targetHeightCm, currentHeight);
-
-        float rollCorr = pidRoll.compute(TARGET_ROLL_DEG, imu.getRoll());
-        float pitchCorr = pidPitch.compute(TARGET_PITCH_DEG, imu.getPitch());
-
-        motors.mix((uint16_t)throttle, rollCorr, pitchCorr, 0.0f);
-    }
+    flightController.updateControlLoop(ultrasonic, baro, imu);
 
     // Statusausgabe alle 500ms
-    if (statusLogEnabled && (millis() - lastPrintMs >= 500))
-    {
-        lastPrintMs = millis();
-        LOG_FMT("[CTRL] Ziel: %.1f cm | Ist: %.1f cm | Throttle: %.0f us | Armed: %s | Bat: %.2fV | Druck: %.2f hPa",
-                targetHeightCm,
-                ultrasonic.isValid() ? ultrasonic.getAltitudeCm() : baro.getAltitudeCm(),
-                pidHeight.getLastThrottle(),
-                armed ? "JA" : "NEIN",
-                battery.getVoltage(),
-                baro.getPressure());
-    }
+    flightController.logStatus(battery, baro, ultrasonic);
 
 #endif // NORMALBETRIEB
 }

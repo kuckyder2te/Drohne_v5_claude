@@ -25,6 +25,8 @@ public:
     void send(const String& msg)     { send(msg.c_str()); }
     void sendLine(const String& msg) { sendLine(msg.c_str()); }
 
+    void printHelp();
+
 private:
     Stream  &_stream;
     String   _buffer;
