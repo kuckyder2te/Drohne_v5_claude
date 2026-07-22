@@ -5,7 +5,6 @@
 #include "control/FlightController.h"
 #include "control/Mode.h"
 #include "mode/NormalMode.h"
-#include "mode/KeyboardTestMode.h"
 #include "Barometer.h"
 #include "comm/CommChannel.h"
 #include "comm/cli.h"
@@ -26,7 +25,7 @@ IMU imu;
 #ifdef NORMALBETRIEB
 NormalMode modeInstance;
 #else
-KeyboardTestMode modeInstance;
+
 #endif
 Mode* activeMode = &modeInstance;   // aktiver Betriebsmodus, Auswahl per NORMALBETRIEB (config.h)
 
