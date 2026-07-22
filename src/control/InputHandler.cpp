@@ -9,8 +9,8 @@
 #include "IMU.h"
 #include "storage/Settings.h"
 
-// Zugriff auf die main.cpp-Globalen wie in src/comm/cli.cpp
-// (extern float targetHeightCm;) / src/mode/KeyboardTestMode.cpp ueber extern-Globale.
+// Zugriff auf die in src/mode/NormalMode.cpp definierten Firmware-Globalen,
+// wie auch src/comm/cli.cpp und src/myLogger.cpp es per extern tun.
 extern CommChannel* comm;
 extern FlightController flightController;
 extern Settings settings;

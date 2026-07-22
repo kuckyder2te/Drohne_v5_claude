@@ -9,23 +9,10 @@
 #define COMM_USE_BLUETOOTH
 
 // ── Betriebsmodus ────────────────────────────────────────────
-// Hauptschalter: aktiv (Standard) = Normalbetrieb, TEST_KEYBOARD
-// unten wird automatisch deaktiviert - unabhaengig davon, ob
-// versehentlich einkommentiert. Zum Testen: hier auskommentieren
-// und TEST_KEYBOARD aktivieren.
-//
-// Die anderen sechs frueheren TEST_*-Modi (Motoren, Barometer, IMU,
-// Ultraschall, I2C-Scan) sind keine config.h-Schalter mehr, sondern
-// eigenstaendige PlatformIO-Umgebungen unter test/ (siehe platformio.ini,
-// z.B. "pio run -e test_imu --target upload").
-#define NORMALBETRIEB
-
-// ── Test-Modus (nur wirksam wenn NORMALBETRIEB oben auskommentiert ist) ──
-// #define TEST_KEYBOARD
-
-#ifdef NORMALBETRIEB
-    #undef TEST_KEYBOARD
-#endif
+// Die Firmware kennt nur noch den Normalbetrieb (Flugbetrieb, siehe
+// src/mode/NormalMode.cpp). Alle Hardware-Testwerkzeuge - inkl. des frueheren
+// TEST_KEYBOARD - sind eigenstaendige PlatformIO-Testumgebungen unter test/
+// (siehe test/README, z.B. "pio test -e rpipico -f test_imu --without-testing").
 
 // Temperaturkompensation: Druckkorrektur pro °C Temperaturdifferenz
 // Empirisch ermittelt für MS5607 Sensor

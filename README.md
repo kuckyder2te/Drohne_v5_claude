@@ -51,7 +51,7 @@
 
 ### Drehrichtungen (X-Konfiguration)
 
-Diagonal gegenüberliegende Motoren drehen gleich (FL/BR gegen den Uhrzeigersinn, FR/BL im Uhrzeigersinn) — das hebt das Reaktionsdrehmoment der Propeller auf, damit die Drohne nicht unkontrolliert um die Hochachse (Yaw) dreht. Am Boden per Motor-Nut-Farbe (schwarz/rot) verifiziert und in Schritt 8 gegen `TEST_MOTORS_SINGLE` geprüft.
+Diagonal gegenüberliegende Motoren drehen gleich (FL/BR gegen den Uhrzeigersinn, FR/BL im Uhrzeigersinn) — das hebt das Reaktionsdrehmoment der Propeller auf, damit die Drohne nicht unkontrolliert um die Hochachse (Yaw) dreht. Am Boden per Motor-Nut-Farbe (schwarz/rot) verifiziert und in Schritt 8 gegen `test_motors_single` geprüft.
 
 ```
     aktuelle Konfiguation
@@ -90,7 +90,7 @@ hanisch durch die ESC-Motor-Verkabelung festgelegt.
 
 > ⚠️ **Absolute CW/CCW-Zuordnung ist nicht "die einzig richtige":** Physikalisch zwingend ist nur, dass diagonale Motoren gleich und benachbarte gegensätzlich drehen (Summe Reaktionsdrehmoment = 0). Welche Diagonale konkret CW und welche CCW ist, ist spiegelbildlich beliebig — eine frühere Version dieser Tabelle hatte genau die umgekehrte Zuordnung (FL=CW/FR=CCW/BL=CCW/BR=CW) und wäre ebenso gültig gewesen. Die obige Tabelle gilt speziell für **dieses** Board (eigener Arm-Farbe-Test, Stand 2026-07-05), nicht als Allgemeinregel.
 >
-> **Sicherheitskritisch ist stattdessen:** Jeder Motor braucht die zu seiner tatsächlichen (gemessenen) Drehrichtung passende Propeller-Steigung (Normal- vs. Pusher-Prop) — sonst schiebt der Propeller Luft nach oben statt unten. Vor der Propeller-Montage: Motor per `TEST_MOTORS_SINGLE` ohne Last einzeln laufen lassen, Drehrichtung von oben beobachten, dann passenden Prop-Typ montieren. Nicht aus abstrakten Konventionen ableiten.
+> **Sicherheitskritisch ist stattdessen:** Jeder Motor braucht die zu seiner tatsächlichen (gemessenen) Drehrichtung passende Propeller-Steigung (Normal- vs. Pusher-Prop) — sonst schiebt der Propeller Luft nach oben statt unten. Vor der Propeller-Montage: Motor per `test_motors_single` ohne Last einzeln laufen lassen, Drehrichtung von oben beobachten, dann passenden Prop-Typ montieren. Nicht aus abstrakten Konventionen ableiten.
 
 ---
 
@@ -390,65 +390,63 @@ PID-Werte werden im Flash gespeichert und beim Start automatisch geladen.
 
 ---
 
-## Test-Modi
+## Test-Tools
 
-Test-Modi in `include/config.h` per `#define` aktivieren.
-**Immer nur einen Test-Modus gleichzeitig!**
+Die Hardware-Testwerkzeuge sind **eigenständige Programme unter `test/`** (kein
+`config.h`-Schalter mehr). Jedes hat sein eigenes `setup()`/`loop()` und wird
+isoliert gebaut/geflasht:
 
-```cpp
-// #define TEST_MOTORS         // Schritt 2: ESC/Motor Test (alle vier)
-// #define TEST_MOTORS_SINGLE  // Einzelmotor-Test per Index
-// #define TEST_BAROMETER      // Schritt 3: MS5611 Test
-// #define TEST_KEYBOARD       // Schritt 4: Tastatur Test
-// #define TEST_I2C_SCAN       // Diagnose: I2C Bus Scanner
-// #define TEST_IMU            // ICM-20948 Roll/Pitch/Yaw Dauerausgabe
-// #define TEST_ULTRASONIC     // HC-SR04 Distanzmessung
-// Alle auskommentiert = NORMALBETRIEB
+```bash
+pio test -e rpipico -f <name> --without-testing
+pio device monitor
 ```
 
-### TEST_MOTORS
-Motortest per Serial-Befehl. **Propeller abnehmen!**
+**Immer nur ein Tool gleichzeitig flashen.** Details siehe `test/README`.
+
+### test_motors
+Motortest per Befehl über BT-UART. **Propeller abnehmen!**
 - `+` → Throttle +50 µs
 - `-` → Throttle -50 µs
 - `s` → STOP
+- `c`/`k`/`m` → ESC-Kalibriersequenz
 
-### TEST_MOTORS_SINGLE
-Wie `TEST_MOTORS`, aber steuert nur einen einzelnen Motor per Index an. **Propeller abnehmen!**
+### test_motors_single
+Wie `test_motors`, aber steuert nur einen einzelnen Motor per Index (`1`-`4`) an. **Propeller abnehmen!**
 
-### TEST_BAROMETER
+### test_barometer
 Barometer-Ausgabe alle 500ms: Höhe, Druck, Temperatur.
 
-### TEST_KEYBOARD
-Pfeiltasten-Erkennung + Barometer-Ausgabe.
-- Pfeil hoch → Zielhöhe +10 cm
-- Pfeil runter → Zielhöhe -10 cm
-- `a` → ARM
+### test_keyboard
+Tasten-Echo über den konfigurierten Kanal (`COMM_USE_BLUETOOTH` → BT-UART, sonst
+USB-Serial) + Barometer-Höhe alle 500ms.
+- `+` / `-` → Echo "Pfeil HOCH/RUNTER"
+- `a` / `d` / `l` → Tasten-Echo
 - `r` → Barometer rekalibrieren
-- `s` → DISARM
 - `h` → Hilfe
 
 > ⚠️ **Pfeiltasten:** Im PlatformIO Terminal (`pio device monitor`) — nicht im eingebauten Serial Monitor!
 
-### TEST_I2C_SCAN
+### test_i2c_scan
 Scannt den I2C-Bus:
 - `0x69` → ICM-20948 ✅ (AD0=GND, siehe Hinweis in [Hardware](#hardware))
 - `0x77` → MS5611 ✅
 
-### TEST_IMU
-Kontinuierliche Ausgabe von Roll/Pitch/Yaw sowie Rohwerten des ICM-20948.
+### test_imu
+Kontinuierliche Ausgabe von Roll/Pitch/AccZ des ICM-20948.
 
-### TEST_ULTRASONIC
-Distanzmessung beider HC-SR04-Kanäle im Wechsel.
+### test_ultrasonic
+Distanzmessung des HC-SR04 alle 200ms.
 
-### NORMALBETRIEB (alle auskommentiert)
-Vollständiger Regelkreis mit PID-Höhenregelung.
+### Normalbetrieb (Firmware)
+Die eigentliche Firmware (`pio run --target upload`) fährt den vollständigen
+Regelkreis mit PID-Höhenregelung.
 
 **Befehle:**
-- Pfeil hoch → Zielhöhe +10 cm
-- Pfeil runter → Zielhöhe -10 cm
-- `a` → ARM (Rekalibrierung + Motoren ein, Ziel 20 cm)
-- `s` → DISARM (Motoren sofort stopp)
+- `+` / `-` → Zielhöhe ±10 cm
+- `a` → ARM (2× bestätigen: Rekalibrierung + Motoren ein, Ziel 20 cm)
+- `d` → DISARM (Motoren sofort stopp)
 - `r` → Barometer rekalibrieren + PID reset
+- `l` → Statuslog ein/aus
 - `h` → Hilfe
 
 ---
@@ -511,7 +509,7 @@ Verbindung per PuTTY. **Baudrate: 9600**
 **Lösungen:**
 1. PS-Pin und NCS-Pin → an 3.3V anschließen
 2. SDA/SCL vertauscht → Verkabelung prüfen
-3. I2C-Scanner starten: `TEST_I2C_SCAN`
+3. I2C-Scanner starten: `test_i2c_scan`
 
 ### Barometer-Drift im Innenraum
 **Problem:** Höhenwerte driften nach dem Start stark (bis ±100 cm).
@@ -524,7 +522,7 @@ Verbindung per PuTTY. **Baudrate: 9600**
 ### ICM-20948 nicht gefunden / falsche I2C-Adresse
 **Problem:** `[IMU] ERROR: ICM-20948 nicht gefunden!`, obwohl AD0 an GND liegt.
 **Ursache:** Auf diesem Board meldet sich der Sensor mit AD0=GND nicht unter der laut Datenblatt erwarteten 0x68, sondern unter 0x69.
-**Lösung:** `TEST_I2C_SCAN` ausführen und die tatsächlich gefundene Adresse prüfen. Adresse ist in `include/sensor/IMU.h` fest auf 0x69 gesetzt.
+**Lösung:** `test_i2c_scan` ausführen und die tatsächlich gefundene Adresse prüfen. Adresse ist in `include/sensor/IMU.h` fest auf 0x69 gesetzt.
 
 ### FastPID — Ungültige Koeffizienten
 **Problem:** FastPID meldet Fehler bei normalen PID-Werten wegen interner Koeffizient-Grenzen.

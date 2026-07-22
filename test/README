@@ -14,6 +14,7 @@ einzigen Catch-all-Test ueber den ganzen test/-Ordner zurueck):
   test_imu/              Roll/Pitch/AccZ           (frueher TEST_IMU)
   test_ultrasonic/       HC-SR04 Distanz           (frueher TEST_ULTRASONIC)
   test_i2c_scan/         I2C-Bus-Scan alle 5s      (frueher TEST_I2C_SCAN)
+  test_keyboard/         Tasten-Echo + Baro-Hoehe  (frueher TEST_KEYBOARD)
 
 Bauen/Flashen eines Tools, z.B. test_imu:
   pio test -e rpipico -f test_imu --without-testing
@@ -24,10 +25,11 @@ Serial, da diese Tools interaktive Bench-Werkzeuge sind und keine
 TEST_ASSERT-Aufrufe machen. Alternativ: PlatformIO-Sidebar in VS Code ->
 Test-Explorer (Kolben-Icon) -> gewuenschtes Tool anklicken.
 
-Der TEST_KEYBOARD-Modus (Tastatur-/CLI-Eingabe testen) ist NICHT hier,
-sondern bleibt Teil der normalen Firmware (config.h: NORMALBETRIEB
-auskommentieren, TEST_KEYBOARD aktivieren) - er haengt eng an CommChannel,
-PIDController und Settings und laesst sich nicht sinnvoll isolieren.
+Das fruehere in-Firmware TEST_KEYBOARD ist jetzt ebenfalls ein eigenstaendiges
+Tool (test_keyboard/). Es liest die Tastenbytes direkt vom konfigurierten Kanal
+(COMM_USE_BLUETOOTH -> Serial1/BT, sonst USB-Serial) und kann daher CommChannel/
+PIDController/Settings (liegen in src/) NICHT mitlinken - PID-Tuning-Befehle
+testet weiterhin nur der Normalbetrieb der eigentlichen Firmware.
 
 Mehr zu PlatformIO Unit Testing:
 https://docs.platformio.org/en/latest/advanced/unit-testing/index.html

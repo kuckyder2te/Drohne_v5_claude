@@ -1,12 +1,15 @@
 #pragma once
 
-#include "control/Mode.h"
-
-// Betriebsmodus fuer echten Flugbetrieb (config.h: NORMALBETRIEB). Sensor-Init,
-// Sicherheits-Check, Input-Handling und der FlightController-Regelkreis -
-// vorher direkt per #ifdef NORMALBETRIEB in main.cpp::setup()/loop().
-class NormalMode : public Mode {
+// Alleiniger Firmware-Einstiegspunkt: kapselt Komposition und Ablauf des
+// echten Flugbetriebs. NormalMode besitzt (als freie Globale in NormalMode.cpp)
+// die Sensor-/Comm-Objekte und den FlightController, initialisiert in setup()
+// Kommunikationskanal (comm/cli) und Sensorik und faehrt in loop() den
+// Regelkreis. main.cpp inkludiert nur diesen Header und ruft setup()/loop().
+//
+// Die Hardware-Testwerkzeuge (inkl. Tastatur-/CLI-Test) sind eigenstaendige
+// Programme unter test/ und beruehren diese Firmware nicht (siehe test/README).
+class NormalMode {
 public:
-    void setup() override;
-    void loop() override;
+    static void setup();
+    static void loop();
 };

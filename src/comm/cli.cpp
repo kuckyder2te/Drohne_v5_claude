@@ -5,8 +5,8 @@
 #include <SimpleSerialShell.h>
 
 // Reine C-Funktionszeiger (SimpleSerialShell::CommandFunction) koennen
-// keinen Zustand einfangen - Zugriff auf das main.cpp-Ziel daher wie in
-// myLogger.cpp (extern CommChannel* comm;) ueber ein extern-Global.
+// keinen Zustand einfangen - Zugriff auf das in src/mode/NormalMode.cpp
+// definierte Ziel daher wie in myLogger.cpp ueber ein extern-Global.
 extern FlightController flightController;
 
 namespace {

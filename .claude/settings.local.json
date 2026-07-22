@@ -5,7 +5,12 @@
       "PowerShell($paths = @\\(\"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\platformio.exe\", \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\"\\); foreach \\($p in $paths\\) { Test-Path $p })",
       "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run 2>&1 | Select-Object -Last 100)",
       "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run 2>&1 | Select-Object -Last 60)",
-      "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run 2>&1 | Select-Object -Last 40)"
+      "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run 2>&1 | Select-Object -Last 40)",
+      "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run 2>&1 | Select-Object -Last 25)",
+      "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" test -e rpipico -f test_keyboard --without-testing 2>&1 | Select-Object -Last 30)",
+      "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" test -e rpipico -f test_keyboard --without-testing --without-uploading 2>&1 | Select-Object -Last 30)",
+      "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" test -e rpipico -f test_barometer --without-testing --without-uploading 2>&1 | Select-Object -Last 20)",
+      "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" test -e rpipico -f test_keyboard --without-testing --without-uploading 2>&1 | Select-Object -Last 20)"
     ]
   }
 }
