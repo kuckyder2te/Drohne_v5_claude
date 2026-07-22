@@ -5,8 +5,8 @@
 #include "config.h"
 #include "comm/CommChannel.h"
 #include "control/PIDController.h"
-#include "sensor/Barometer.h"
-#include "sensor/IMU.h"
+#include "Barometer.h"
+#include "IMU.h"
 #include "storage/Settings.h"
 
 // Zugriff auf die main.cpp-Globalen wie in src/comm/cli.cpp

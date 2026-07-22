@@ -9,30 +9,22 @@
 #define COMM_USE_BLUETOOTH
 
 // ── Betriebsmodus ────────────────────────────────────────────
-// Hauptschalter: aktiv (Standard) = Normalbetrieb, alle Testmodi
-// unten werden automatisch deaktiviert - unabhaengig davon, ob
-// versehentlich einer von ihnen auch einkommentiert ist. Zum
-// Testen: hier auskommentieren und genau einen TEST_*-Schalter
-// aktivieren.
+// Hauptschalter: aktiv (Standard) = Normalbetrieb, TEST_KEYBOARD
+// unten wird automatisch deaktiviert - unabhaengig davon, ob
+// versehentlich einkommentiert. Zum Testen: hier auskommentieren
+// und TEST_KEYBOARD aktivieren.
+//
+// Die anderen sechs frueheren TEST_*-Modi (Motoren, Barometer, IMU,
+// Ultraschall, I2C-Scan) sind keine config.h-Schalter mehr, sondern
+// eigenstaendige PlatformIO-Umgebungen unter test/ (siehe platformio.ini,
+// z.B. "pio run -e test_imu --target upload").
 #define NORMALBETRIEB
 
-// ── Test-Modi (nur wirksam wenn NORMALBETRIEB oben auskommentiert ist) ──
-// #define TEST_MOTORS
-// #define TEST_MOTORS_SINGLE  // ← einzelne Motoren testen
-// #define TEST_BAROMETER
+// ── Test-Modus (nur wirksam wenn NORMALBETRIEB oben auskommentiert ist) ──
 // #define TEST_KEYBOARD
-// #define TEST_I2C_SCAN
-// #define TEST_IMU
-// #define TEST_ULTRASONIC
 
 #ifdef NORMALBETRIEB
-    #undef TEST_MOTORS
-    #undef TEST_MOTORS_SINGLE
-    #undef TEST_BAROMETER
     #undef TEST_KEYBOARD
-    #undef TEST_I2C_SCAN
-    #undef TEST_IMU
-    #undef TEST_ULTRASONIC
 #endif
 
 // Temperaturkompensation: Druckkorrektur pro °C Temperaturdifferenz

@@ -1,4 +1,4 @@
-#include "sensor/Barometer.h"
+#include "Barometer.h"
 #include "myLogger.h"
 #include "pins.h"
 

@@ -1,11 +1,33 @@
+Dieses Verzeichnis nutzt PlatformIOs Unit-Testing-Ordner (test/) NICHT fuer
+den Unity-Testrunner mit Assert-Makros, sondern fuer eigenstaendige
+Hardware-Testtools: je ein Unterordner mit einem eigenen setup()/loop(),
+das ueber lib/ die passenden Treiber-Module (MotorMixer, IMU, Barometer,
+Ultrasonic, Battery) wiederverwendet, aber nichts aus src/ (insbesondere
+nicht main.cpp) mitkompiliert - dank PlatformIOs Default test_build_src=false.
 
-This directory is intended for PlatformIO Test Runner and project tests.
+Vorhandene Tools (der "test_"-Praefix ist Pflicht - PlatformIO erkennt nur
+so benannte Unterordner als eigene Testsuite, sonst faellt es auf einen
+einzigen Catch-all-Test ueber den ganzen test/-Ordner zurueck):
+  test_motors/           Alle vier Motoren + ESC-Kalibrierung (frueher TEST_MOTORS)
+  test_motors_single/    Ein Motor per Index 1-4  (frueher TEST_MOTORS_SINGLE)
+  test_barometer/        Druck/Hoehe/Temperatur    (frueher TEST_BAROMETER)
+  test_imu/              Roll/Pitch/AccZ           (frueher TEST_IMU)
+  test_ultrasonic/       HC-SR04 Distanz           (frueher TEST_ULTRASONIC)
+  test_i2c_scan/         I2C-Bus-Scan alle 5s      (frueher TEST_I2C_SCAN)
 
-Unit Testing is a software testing method by which individual units of
-source code, sets of one or more MCU program modules together with associated
-control data, usage procedures, and operating procedures, are tested to
-determine whether they are fit for use. Unit testing finds problems early
-in the development cycle.
+Bauen/Flashen eines Tools, z.B. test_imu:
+  pio test -e rpipico -f test_imu --without-testing
+  pio device monitor
 
-More information about PlatformIO Unit Testing:
-- https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
+"--without-testing" ueberspringt PlatformIOs Unity-Ergebnis-Auswertung ueber
+Serial, da diese Tools interaktive Bench-Werkzeuge sind und keine
+TEST_ASSERT-Aufrufe machen. Alternativ: PlatformIO-Sidebar in VS Code ->
+Test-Explorer (Kolben-Icon) -> gewuenschtes Tool anklicken.
+
+Der TEST_KEYBOARD-Modus (Tastatur-/CLI-Eingabe testen) ist NICHT hier,
+sondern bleibt Teil der normalen Firmware (config.h: NORMALBETRIEB
+auskommentieren, TEST_KEYBOARD aktivieren) - er haengt eng an CommChannel,
+PIDController und Settings und laesst sich nicht sinnvoll isolieren.
+
+Mehr zu PlatformIO Unit Testing:
+https://docs.platformio.org/en/latest/advanced/unit-testing/index.html

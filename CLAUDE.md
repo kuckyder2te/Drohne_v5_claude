@@ -18,11 +18,16 @@ pio device monitor
 
 # Build + upload + monitor in one step
 pio run --target upload && pio device monitor
+
+# Build/flash one standalone hardware test tool (see Test Modes below),
+# e.g. the IMU tool under test/test_imu/ — main.cpp is NOT compiled for this
+pio test -e rpipico -f test_imu --without-testing
+pio device monitor
 ```
 
-There is no automated test suite — validation happens via the hardware test modes below plus manual bench/flight testing (see README.md "Ein-/Ausschalten" for the arm/disarm power-on procedure).
+There is no automated test suite — validation happens via the hardware test tools below plus manual bench/flight testing (see README.md "Ein-/Ausschalten" for the arm/disarm power-on procedure).
 
-Build flags in `platformio.ini`: `-DGLOBAL_DEBUG` is always on. `NORMALBETRIEB` in [include/config.h](include/config.h) is the master switch: while defined (default) it force-`#undef`s all `TEST_*` macros, so normal flight operation is active regardless of what's left uncommented below it. To run a test mode, comment out `NORMALBETRIEB` and uncomment exactly one `TEST_*` `#define`.
+Build flags in `platformio.ini`: `-DGLOBAL_DEBUG` is always on. `NORMALBETRIEB` in [include/config.h](include/config.h) is the master switch: while defined (default) it force-`#undef`s `TEST_KEYBOARD`, so normal flight operation is active regardless of whether it's left uncommented below. To run the keyboard test, comment out `NORMALBETRIEB` and uncomment `TEST_KEYBOARD`. The other six former `TEST_*` modes are not `config.h` switches anymore — they're standalone tools under `test/`, selected via `pio test -f <name>` (see Test Modes below), never `NORMALBETRIEB`/`main.cpp`.
 
 Logging is controlled by two flags consumed in [include/myLogger.h](include/myLogger.h): `_SERIAL_LOG` (USB Serial) and `_BT_LOG` (Bluetooth). Use `LOG(msg)` and `LOG_FMT(fmt, ...)` — they route to both outputs simultaneously when enabled.
 
@@ -30,9 +35,9 @@ Logging is controlled by two flags consumed in [include/myLogger.h](include/myLo
 
 ## Architecture Overview
 
-The firmware implements a **cascaded PID altitude + attitude stabilizer** for a quadcopter running on RP2040. All logic lives in `src/main.cpp`'s `setup()`/`loop()`, guarded by `#ifdef` blocks per test mode — exactly one code path is active at a time, selected at compile time via `config.h`.
+The firmware implements a **cascaded PID altitude + attitude stabilizer** for a quadcopter running on RP2040. Normal-operation logic lives in `src/main.cpp`'s `setup()`/`loop()`, guarded by `#ifdef NORMALBETRIEB`; the one remaining in-firmware test mode (`TEST_KEYBOARD`) lives alongside it in [src/testmode/TestModes.cpp](src/testmode/TestModes.cpp), mutually exclusive with `NORMALBETRIEB` via `config.h`. The other six hardware test tools are separate standalone programs under `test/` (see Test Modes below) — they never touch `main.cpp`.
 
-### Control Loop (normal operation, all `TEST_*` macros undefined)
+### Control Loop (normal operation, `NORMALBETRIEB` defined)
 
 1. **Sensor update** every loop iteration — barometer, ultrasonic, IMU all polled unconditionally.
 2. **Safety checks** — disarms (`disarm()`) on IMU-not-ready or an altitude jump > 500 cm between consecutive loop iterations.
@@ -48,31 +53,45 @@ The firmware implements a **cascaded PID altitude + attitude stabilizer** for a 
 
 | Path | Responsibility |
 |------|---------------|
-| [include/config.h](include/config.h) | All tunable parameters: ESC limits, PID defaults, flight parameters, test-mode switches |
+| [include/config.h](include/config.h) | All tunable parameters: ESC limits, PID defaults, flight parameters, `NORMALBETRIEB`/`TEST_KEYBOARD` switch |
 | [include/pins.h](include/pins.h) | Single source of truth for all GPIO assignments |
-| [include/myLogger.h](include/myLogger.h) | `LOG`/`LOG_FMT` macros — dual output to USB Serial + BT UART |
-| [src/control/MotorMixer.cpp](src/control/MotorMixer.cpp) | PWM to ESCs using native RP2040 `hardware/pwm.h` SDK (50 Hz, 20000 wrap, 1000–2000 µs) |
+| [include/myLogger.h](include/myLogger.h) | `LOG`/`LOG_FMT` macros — dual output to USB Serial + BT UART. Implemented in `src/myLogger.cpp` (routes through `CommChannel`) for the main firmware; each standalone tool under `test/` provides its own minimal `dlog()` writing straight to `Serial`, so it doesn't need to link `CommChannel`/`PIDController`/`Settings` |
+| [lib/MotorMixer/MotorMixer.cpp](lib/MotorMixer/MotorMixer.cpp) | PWM to ESCs using native RP2040 `hardware/pwm.h` SDK (50 Hz, 20000 wrap, 1000–2000 µs) |
 | [src/control/PIDController.cpp](src/control/PIDController.cpp) | Custom PID — `useOffset=true` (height) adds `THROTTLE_OFFSET_US` so output is absolute throttle clamped to `[ESC_MIN_US, ESC_MAX_US]`; `useOffset=false` (roll/pitch) outputs a pure ±500 correction; integral only accumulates while `enableIntegral(true)` |
-| [src/sensor/IMU.cpp](src/sensor/IMU.cpp) | ICM-20948 9-DoF via the `wollewald/ICM20948_WE` library at I2C address **0x69** (board-specific quirk — datasheet implies 0x68 for AD0=GND); complementary filter (`alpha=0.98`) fusing gyro integration with accel-derived roll/pitch; I2C bus recovery via 9 SCL pulses in `main.cpp::i2cBusRecovery()` before `Wire.begin()` |
-| [src/sensor/Barometer.cpp](src/sensor/Barometer.cpp) | MS5611 (0x77); needs a 90 s warmup + calibration before it's trustworthy; ring-buffer filter; `BARO_TEMP_COEFF` compensates thermal drift |
-| [src/sensor/Ultrasonic.cpp](src/sensor/Ultrasonic.cpp) | HC-SR04 on pins 8/6; valid range ~2–300 cm; preferred altitude source over barometer whenever `isValid()` |
-| [src/sensor/Battery.cpp](src/sensor/Battery.cpp) | ADC pin 26, voltage divider; warns/critical via buzzer pin 10 |
+| [lib/IMU/IMU.cpp](lib/IMU/IMU.cpp) | ICM-20948 9-DoF via the `wollewald/ICM20948_WE` library at I2C address **0x69** (board-specific quirk — datasheet implies 0x68 for AD0=GND); complementary filter (`alpha=0.98`) fusing gyro integration with accel-derived roll/pitch; I2C bus recovery via 9 SCL pulses in `IMU::begin(true)` before `Wire.begin()` |
+| [lib/Barometer/Barometer.cpp](lib/Barometer/Barometer.cpp) | MS5611 (0x77); needs a 90 s warmup + calibration before it's trustworthy; ring-buffer filter; `BARO_TEMP_COEFF` compensates thermal drift; expects `Wire` already initialized by its caller |
+| [lib/Ultrasonic/Ultrasonic.cpp](lib/Ultrasonic/Ultrasonic.cpp) | HC-SR04 on pins 8/6; valid range ~2–300 cm; preferred altitude source over barometer whenever `isValid()` |
+| [lib/Battery/Battery.cpp](lib/Battery/Battery.cpp) | ADC pin 26, voltage divider; warns/critical via buzzer pin 10 |
 | [src/comm/CommChannel.cpp](src/comm/CommChannel.cpp) | Transport-agnostic key/command parser and PID-tuning command processor. Constructor takes any `Stream&` (used for BT UART `Serial1` and USB `Serial` today; a TCP `Client` would work too, since it also derives from `Stream`). ANSI escape sequences are always discarded; `+`/`-` act immediately; other single-char commands (`A D H R L S ?`) resolve after a 200 ms timeout or on newline (whichever comes first); multi-char strings (`RP=`/`RI=`/`RD=`, `PP=`/`PI=`/`PD=`, height `P=`/`I=`/`D=`, `SAVE`, `RESET`) terminate on newline only. |
 | [src/storage/Settings.cpp](src/storage/Settings.cpp) | EEPROM persistence for height PID Kp/Ki/Kd, validity marker byte |
+| [src/control/InputHandler.cpp](src/control/InputHandler.cpp) | Normal-mode key/command handling (ARM timeout, `switch(key)`) extracted out of `main.cpp::loop()` |
+| [src/testmode/TestModes.cpp](src/testmode/TestModes.cpp) | Only the `TEST_KEYBOARD` in-firmware test mode now (the other six moved to standalone tools under `test/`, see below) |
+
+`MotorMixer`, `IMU`, `Barometer`, `Ultrasonic`, `Battery` live in `lib/<Name>/` (PlatformIO private libraries) rather than `src/`/`include/`, specifically so the standalone test tools under `test/` can link each one individually without pulling in `main.cpp` or unrelated modules — PlatformIO auto-links `lib/` into every environment and every `pio test` build regardless of `src_dir`/`test_build_src`. `PIDController`, `CommChannel`, `Settings`, `InputHandler` stay in `src/`/`include/` since only the main firmware (and `TEST_KEYBOARD`) needs them.
 
 ### Test Modes
 
-Defined in [include/config.h](include/config.h), gated by the `NORMALBETRIEB` master switch (see Build System above). With `NORMALBETRIEB` commented out, uncomment exactly one to run that test:
+Six of the former seven `TEST_*` modes are now standalone tools under [test/](test/) — each its own tiny program (own `setup()`/`loop()`), built in isolation via PlatformIO's Unit Testing mechanism (`test_build_src` defaults to `false`, so `main.cpp`/the rest of `src/` is **not** compiled for these; `lib/` is still auto-linked, giving each tool just the driver module(s) it actually `#include`s):
 
-- `TEST_MOTORS` — all four motors together, plus an ESC-calibration sub-sequence (`c`/`k`/`m`)
-- `TEST_MOTORS_SINGLE` — drive one motor by index (`1`=FL, `2`=FR, `3`=BR, `4`=BL)
-- `TEST_BAROMETER` — continuous pressure/altitude/temperature print
-- `TEST_KEYBOARD` — BT/keyboard command echo + barometer print
-- `TEST_I2C_SCAN` — scans the I2C bus every 5 s (expects `0x69` IMU, `0x77` baro); includes an SDA-stuck-low hardware-fault check before scanning
-- `TEST_IMU` — continuous roll/pitch/AccZ print
-- `TEST_ULTRASONIC` — HC-SR04 distance print every 200 ms
+```bash
+pio test -e rpipico -f <name> --without-testing
+pio device monitor
+```
 
-`COMM_USE_BLUETOOTH` (also in [include/config.h](include/config.h)) is a separate, independent switch: it selects which `Stream` the single `comm` channel wraps (`Serial1`/BT UART when defined, `Serial`/USB when commented out) — not a test mode, and orthogonal to the `TEST_*` switches above.
+(`--without-testing` skips PlatformIO's Unity pass/fail parsing over Serial — these are interactive bench tools, not assertion-based tests. Equivalently, use the flask/test-tube icon in the PlatformIO IDE sidebar and pick the tool by name.)
+
+(the `test_` prefix on each folder is required — PlatformIO only recognizes subdirectories named that way as individual test suites, otherwise it falls back to one catch-all test spanning the whole `test/` tree)
+
+- `test/test_motors/` — all four motors together, plus an ESC-calibration sub-sequence (`c`/`k`/`m`); reads commands from `BT_UART` (`Serial1`) directly, same as before
+- `test/test_motors_single/` — drive one motor by index (`1`=FL, `2`=FR, `3`=BR, `4`=BL); also via `BT_UART`
+- `test/test_barometer/` — continuous pressure/altitude/temperature print
+- `test/test_imu/` — continuous roll/pitch/AccZ print
+- `test/test_ultrasonic/` — HC-SR04 distance print every 200 ms
+- `test/test_i2c_scan/` — scans the I2C bus every 5 s (expects `0x69` IMU, `0x77` baro); includes an SDA-stuck-low hardware-fault check before scanning
+
+`TEST_KEYBOARD` (BT/keyboard command echo + barometer print) is the **only** remaining `config.h`-gated in-firmware test mode — defined in [include/config.h](include/config.h), gated by the `NORMALBETRIEB` master switch (see Build System above): comment out `NORMALBETRIEB` and uncomment `TEST_KEYBOARD` to run it. It stayed in `main.cpp`/`TestModes.cpp` rather than becoming a standalone tool because it exercises `CommChannel::processCommand()` against real `PIDController`/`Settings` instances — essentially the whole input/tuning stack, not an isolable hardware driver.
+
+`COMM_USE_BLUETOOTH` (also in [include/config.h](include/config.h)) is a separate, independent switch: it selects which `Stream` the single `comm` channel wraps (`Serial1`/BT UART when defined, `Serial`/USB when commented out) — not a test mode, and orthogonal to `NORMALBETRIEB`/`TEST_KEYBOARD` above, and irrelevant to the standalone `test/` tools (which don't use `comm`/`CommChannel` at all).
 
 ### Key Design Decisions
 
@@ -80,7 +99,7 @@ Defined in [include/config.h](include/config.h), gated by the `NORMALBETRIEB` ma
 - **Native RP2040 PWM SDK** (`hardware/pwm.h`) instead of `RP2040_PWM` library — more stable, no library dependency.
 - **Custom PID** instead of FastPID — FastPID's coefficient clamping conflicted with required ranges.
 - **Ultrasonic preferred over barometer** when in range (2–300 cm) — better accuracy and no warmup requirement.
-- **I2C bus recovery** — sends 9 clock pulses to release a stuck SDA line before every `Wire.begin()`, both in normal operation and in `TEST_I2C_SCAN`.
+- **I2C bus recovery** — sends 9 clock pulses to release a stuck SDA line before every `Wire.begin()`, both in `IMU::begin(true)` (normal operation) and in the standalone `test/test_i2c_scan/` tool (own copy, since that tool doesn't link `IMU`).
 - **Integral anti-windup gated on liftoff** (`LIFTOFF_HEIGHT_CM`) — height/roll/pitch integrators stay at zero until the ultrasonic confirms the craft is airborne, and are cleared again on landing.
 - **Single active input/log channel via a `comm` pointer, chosen at compile time** — `comm` is the *only* named `CommChannel*` in the code (no separate `bt`/`serial` globals). Which `Stream` it wraps is decided by the `COMM_USE_BLUETOOTH` switch in `config.h`: `comm = new CommChannel(Serial1)` (BT UART) when defined, `comm = new CommChannel(Serial)` (USB) otherwise — a single `#ifdef` in `setup()`, evaluated only after both `Serial` and `Serial1` (pins + `begin()`) are fully configured, since `TEST_MOTORS`/`TEST_MOTORS_SINGLE` read `BT_UART` directly regardless of the switch. There is no BT-primary/Serial-fallback redundancy; switching channels means flipping `COMM_USE_BLUETOOTH` and recompiling. `CommChannel` itself (parameterized by `Stream&`) uses one unified parsing scheme regardless of channel: ANSI arrow-key escape sequences are always discarded (harmless no-op for BT), single-char commands resolve via a 200 ms timeout so BT apps that don't send Enter still work, and `+`/`-` act instantly. Note: `d` (disarm) is not byte-instant — it resolves within ≤200 ms — because a byte-instant `d`/`D` would break the `D=<value>` (height Kd) tuning command the instant the `D` byte is read, before `=<value>` arrives.
 - **Yaw = 0 currently** — gyro-based yaw stabilization deferred to Phase 3; only the complementary-filtered roll/pitch are used for attitude control.
@@ -96,9 +115,9 @@ Defined in [include/config.h](include/config.h), gated by the `NORMALBETRIEB` ma
 
 See README.md for full hardware detail (pinout table, motor spin-direction verification, ESD handling procedure, power-on/off sequencing). Highlights relevant to code changes:
 
-- **MS5611 not found**: check PS/NCS pins on the CJMCU-10DOF-style board are tied to 3.3 V; run `TEST_I2C_SCAN`.
+- **MS5611 not found**: check PS/NCS pins on the CJMCU-10DOF-style board are tied to 3.3 V; run `pio test -e rpipico -f test_i2c_scan --without-testing`.
 - **Barometer drift indoors**: needs the full 90 s warmup and a recalibration (`r`) immediately before arming.
 - **Arrow keys not recognized over USB**: use `pio device monitor`, not the VS Code built-in Serial Monitor — and remember BT is the intended primary input anyway.
 - **Pico not detected by picotool**: hold BOOTSEL, flash `flash_nuke.uf2`, then re-flash normally.
-- **ICM-20948 not found despite correct wiring**: confirm it enumerates at 0x69, not 0x68, via `TEST_I2C_SCAN`.
-- **Motor spin direction vs. propeller pitch**: the CW/CCW assignment in README is specific to this physical board's ESC wiring, not a universal rule — always verify per-motor with `TEST_MOTORS_SINGLE` (props off) before mounting propellers, and match propeller pitch (normal vs. pusher) to the observed direction.
+- **ICM-20948 not found despite correct wiring**: confirm it enumerates at 0x69, not 0x68, via `pio test -e rpipico -f test_i2c_scan --without-testing`.
+- **Motor spin direction vs. propeller pitch**: the CW/CCW assignment in README is specific to this physical board's ESC wiring, not a universal rule — always verify per-motor with `pio test -e rpipico -f test_motors_single --without-testing` (props off) before mounting propellers, and match propeller pitch (normal vs. pusher) to the observed direction.

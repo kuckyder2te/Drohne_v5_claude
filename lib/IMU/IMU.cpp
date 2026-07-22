@@ -1,4 +1,4 @@
-#include "sensor/IMU.h"
+#include "IMU.h"
 #include "myLogger.h"
 #include "pins.h"
 
