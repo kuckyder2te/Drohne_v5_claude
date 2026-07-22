@@ -416,16 +416,6 @@ Wie `test_motors`, aber steuert nur einen einzelnen Motor per Index (`1`-`4`) an
 ### test_barometer
 Barometer-Ausgabe alle 500ms: Höhe, Druck, Temperatur.
 
-### test_keyboard
-Tasten-Echo über den konfigurierten Kanal (`COMM_USE_BLUETOOTH` → BT-UART, sonst
-USB-Serial) + Barometer-Höhe alle 500ms.
-- `+` / `-` → Echo "Pfeil HOCH/RUNTER"
-- `a` / `d` / `l` → Tasten-Echo
-- `r` → Barometer rekalibrieren
-- `h` → Hilfe
-
-> ⚠️ **Pfeiltasten:** Im PlatformIO Terminal (`pio device monitor`) — nicht im eingebauten Serial Monitor!
-
 ### test_i2c_scan
 Scannt den I2C-Bus:
 - `0x69` → ICM-20948 ✅ (AD0=GND, siehe Hinweis in [Hardware](#hardware))

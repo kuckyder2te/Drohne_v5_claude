@@ -27,7 +27,7 @@ pio device monitor
 
 There is no automated test suite — validation happens via the hardware test tools below plus manual bench/flight testing (see README.md "Ein-/Ausschalten" for the arm/disarm power-on procedure).
 
-Build flags in `platformio.ini`: `-DGLOBAL_DEBUG` is always on. The firmware has a **single mode** — normal flight operation ([src/mode/NormalMode.cpp](src/mode/NormalMode.cpp)); there is no longer a `NORMALBETRIEB`/`TEST_KEYBOARD` compile switch. All seven former `TEST_*` modes (including the keyboard/CLI test) are standalone tools under `test/`, selected via `pio test -f <name>` (see Test Modes below), and never touch `main.cpp`.
+Build flags in `platformio.ini`: `-DGLOBAL_DEBUG` is always on. The firmware has a **single mode** — normal flight operation ([src/mode/NormalMode.cpp](src/mode/NormalMode.cpp)); there is no longer a `NORMALBETRIEB`/`TEST_KEYBOARD` compile switch. Six former `TEST_*` modes are standalone tools under `test/`, selected via `pio test -f <name>` (see Test Modes below), and never touch `main.cpp`; the former keyboard/CLI test has no standalone tool — that input/tuning path is only reachable through the real firmware now.
 
 Logging is controlled by two flags consumed in [include/myLogger.h](include/myLogger.h): `_SERIAL_LOG` (USB Serial) and `_BT_LOG` (Bluetooth). Use `LOG(msg)` and `LOG_FMT(fmt, ...)` — they route to both outputs simultaneously when enabled.
 
@@ -72,7 +72,7 @@ The firmware implements a **cascaded PID altitude + attitude stabilizer** for a 
 
 ### Test Modes
 
-All seven former `TEST_*` modes are standalone tools under [test/](test/) — each its own tiny program (own `setup()`/`loop()`), built in isolation via PlatformIO's Unit Testing mechanism (`test_build_src` defaults to `false`, so `main.cpp`/the rest of `src/` is **not** compiled for these; `lib/` is still auto-linked, giving each tool just the driver module(s) it actually `#include`s):
+Six former `TEST_*` modes are standalone tools under [test/](test/) — each its own tiny program (own `setup()`/`loop()`), built in isolation via PlatformIO's Unit Testing mechanism (`test_build_src` defaults to `false`, so `main.cpp`/the rest of `src/` is **not** compiled for these; `lib/` is still auto-linked, giving each tool just the driver module(s) it actually `#include`s):
 
 ```bash
 pio test -e rpipico -f <name> --without-testing
@@ -89,9 +89,10 @@ pio device monitor
 - `test/test_imu/` — continuous roll/pitch/AccZ print
 - `test/test_ultrasonic/` — HC-SR04 distance print every 200 ms
 - `test/test_i2c_scan/` — scans the I2C bus every 5 s (expects `0x69` IMU, `0x77` baro); includes an SDA-stuck-low hardware-fault check before scanning
-- `test/test_keyboard/` — key echo over the configured channel (`COMM_USE_BLUETOOTH` → `Serial1`/BT UART, else USB `Serial`) plus barometer-height print; `r` recalibrates the baro. Reads bytes directly from the stream (no `CommChannel`), so unlike the old in-firmware `TEST_KEYBOARD` it does **not** exercise `CommChannel::processCommand()`/PID tuning — that path is only reachable through the real firmware now.
 
-`COMM_USE_BLUETOOTH` in [include/config.h](include/config.h) selects which `Stream` the single firmware `comm` channel wraps (`Serial1`/BT UART when defined, `Serial`/USB when commented out). The `test/test_keyboard/` tool honors the same switch for its own input; the other six `test/` tools don't use `comm`/`CommChannel` at all.
+The former in-firmware `TEST_KEYBOARD` (BT/keyboard command echo + PID tuning) has **no** standalone tool: it exercised `CommChannel::processCommand()` against real `PIDController`/`Settings` instances — the whole input/tuning stack, not an isolable hardware driver — so it can't be meaningfully reproduced under `test/` (where `src/` isn't compiled). That path is only reachable through the real firmware now.
+
+`COMM_USE_BLUETOOTH` in [include/config.h](include/config.h) selects which `Stream` the single firmware `comm` channel wraps (`Serial1`/BT UART when defined, `Serial`/USB when commented out). None of the `test/` tools use `comm`/`CommChannel`.
 
 ### Key Design Decisions
 
