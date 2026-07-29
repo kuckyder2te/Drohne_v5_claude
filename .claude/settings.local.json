@@ -29,7 +29,11 @@
       "PowerShell(cd \"H:\\\\hobby\\\\Projekte\\\\Drohne\\\\VS Code\\\\Drohne_v5_Claude\"; & \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\python.exe\" \".claude\\\\skills\\\\serial-cli-test\\\\height_test.py\" 2>&1)",
       "Bash(~/.platformio/penv/Scripts/python.exe -c \"import serial.tools.list_ports as p; [print\\(x.device, x.hwid\\) for x in p.comports\\(\\)]\")",
       "Bash(~/.platformio/penv/Scripts/python.exe \".claude/skills/serial-cli-test/height_test.py\")",
-      "PowerShell(& \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\python.exe\" \".\\\\.claude\\\\skills\\\\serial-cli-test\\\\height_test.py\")"
+      "PowerShell(& \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\python.exe\" \".\\\\.claude\\\\skills\\\\serial-cli-test\\\\height_test.py\")",
+      "Bash(pio run *)",
+      "PowerShell(pio run 2>&1)",
+      "PowerShell($candidates = @\\(\"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\platformio.exe\", \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\"\\); foreach \\($c in $candidates\\) { Test-Path $c })",
+      "PowerShell(& \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run 2>&1 | Select-Object -Last 80)"
     ]
   }
 }
