@@ -29,14 +29,31 @@ namespace {
     // landen, von dem der Befehl kam. LOG() geht daneben unabhaengig davon
     // an Serial und/oder BT_UART (Flags _SERIAL_LOG/_BT_LOG in config.h).
 
-    // Komma als Dezimaltrennzeichen akzeptieren (deutsche Tastatur).
-    float parseFloatDe(const char *s) {
-        char buf[16];
-        strncpy(buf, s, sizeof(buf) - 1);
-        buf[sizeof(buf) - 1] = '\0';
+    // Parst eine Zahl, Komma wie Punkt als Dezimaltrenner (deutsche Tastatur).
+    //
+    // Gibt false zurueck, wenn der String keine vollstaendig verwertbare Zahl
+    // ist. Das ist der eigentliche Zweck: strtof allein liefert fuer "abc"
+    // still 0.0f, ein vertipptes "pid -height -Kp o.5" wuerde den Beiwert
+    // also unbemerkt auf null setzen statt sich zu beschweren.
+    bool parseFloatDe(const char *s, float &out) {
+        if (!s || !*s) return false;
+
+        char buf[24];
+        if (strlen(s) >= sizeof(buf)) return false;  // sonst wuerde gekuerzt
+        strcpy(buf, s);
         for (char *p = buf; *p; ++p)
             if (*p == ',') *p = '.';
-        return strtof(buf, nullptr);
+
+        char *end = nullptr;
+        float v = strtof(buf, &end);
+
+        if (end == buf) return false;            // keine Ziffer gefunden
+        while (*end == ' ' || *end == '\t') ++end;
+        if (*end != '\0') return false;          // Rest wie "12abc" oder "1.2.3"
+        if (!isfinite(v)) return false;          // "nan", "inf", Ueberlauf
+
+        out = v;
+        return true;
     }
 
     // ── Achsen fuer das "pid"-Kommando ─────────────────────────
@@ -148,7 +165,13 @@ namespace {
             shell.println(F("usage: setHeight <cm>"));
             return -1;
         }
-        flightController.setTargetHeightCm(parseFloatDe(argv[1]));
+        float cm;
+        if (!parseFloatDe(argv[1], cm)) {
+            shell.print(F("setHeight: keine gueltige Zahl: "));
+            shell.println(argv[1]);
+            return -1;
+        }
+        flightController.setTargetHeightCm(cm);
         printTargetHeight();
         return 0;
     }
@@ -179,6 +202,9 @@ namespace {
         shell.println(F("ihnen stehen. Optionen sind case-insensitiv, Komma als"));
         shell.println(F("Dezimaltrenner ist erlaubt. Ausgegeben werden die genannten"));
         shell.println(F("Achsen - ohne Achsenangabe alle."));
+        shell.println(F("Ein Wert, der keine gueltige Zahl ist, bricht den ganzen"));
+        shell.println(F("Aufruf ab - es wird dann nichts gesetzt, sichert und"));
+        shell.println(F("zurueckgesetzt auch nicht."));
         shell.println(F("-save/-reset gelten IMMER fuer alle drei Regler (das EEPROM"));
         shell.println(F("hat nur einen Gueltigkeitsmarker) und werden unabhaengig von"));
         shell.println(F("ihrer Position ausgefuehrt: erst -reset, dann die -K-Werte,"));
@@ -206,18 +232,15 @@ namespace {
             else if (optIs(argv[i], "-save"))  doSave  = true;
         }
 
-        if (doReset) {
-            settings.reset();
-            for (int ax = 0; ax < AX_COUNT; ++ax) {
-                PidCoeffs d = axisDefaults(ax);
-                PIDController &p = axisPid(ax);
-                p.setKp(d.kp);
-                p.setKi(d.ki);
-                p.setKd(d.kd);
-            }
-        }
+        // Durchgang 2: alles pruefen und die Schreibvorgaenge nur SAMMELN.
+        // Angewendet wird erst in Durchgang 3, wenn die ganze Zeile fehlerfrei
+        // ist - sonst hinterliesse ein Tippfehler im dritten Argument die
+        // ersten beiden bereits gesetzt, und man taete beim Tuning mit einem
+        // halb geaenderten Regler weiter.
+        struct PidWrite { int8_t axis; char which; float value; };
+        PidWrite writes[8];
+        uint8_t  nWrites = 0;
 
-        // Durchgang 2: Achsenwahl und Koeffizienten
         bool selected[AX_COUNT] = {false, false, false};
         bool anySelected = false;
         int  current     = -1;   // aktuelle Achse, -1 = noch keine gewaehlt
@@ -254,11 +277,23 @@ namespace {
                     shell.println(a);
                     return -1;
                 }
-                float v = parseFloatDe(argv[++i]);
-                PIDController &p = axisPid(current);
-                if      (isKp) p.setKp(v);
-                else if (isKi) p.setKi(v);
-                else           p.setKd(v);
+                const char *valStr = argv[++i];
+                float v;
+                if (!parseFloatDe(valStr, v)) {
+                    shell.print(F("pid: keine gueltige Zahl nach "));
+                    shell.print(a);
+                    shell.print(F(": "));
+                    shell.println(valStr);
+                    return -1;
+                }
+                if (nWrites >= (uint8_t)(sizeof(writes) / sizeof(writes[0]))) {
+                    shell.println(F("pid: zu viele Werte in einem Aufruf"));
+                    return -1;
+                }
+                writes[nWrites].axis  = (int8_t)current;
+                writes[nWrites].which = isKp ? 'P' : (isKi ? 'I' : 'D');
+                writes[nWrites].value = v;
+                ++nWrites;
                 continue;
             }
 
@@ -266,6 +301,27 @@ namespace {
             shell.println(a);
             shell.println(F("pid -h fuer Hilfe"));
             return -1;
+        }
+
+        // Durchgang 3: ab hier kann nichts mehr fehlschlagen
+        if (doReset) {
+            settings.reset();
+            for (int ax = 0; ax < AX_COUNT; ++ax) {
+                PidCoeffs d = axisDefaults(ax);
+                PIDController &p = axisPid(ax);
+                p.setKp(d.kp);
+                p.setKi(d.ki);
+                p.setKd(d.kd);
+            }
+        }
+
+        for (uint8_t w = 0; w < nWrites; ++w) {
+            PIDController &p = axisPid(writes[w].axis);
+            switch (writes[w].which) {
+                case 'P': p.setKp(writes[w].value); break;
+                case 'I': p.setKi(writes[w].value); break;
+                default:  p.setKd(writes[w].value); break;
+            }
         }
 
         if (doSave) {

@@ -104,6 +104,10 @@ The axis is *stateful*: it applies to every following `-K…` option, which is w
 
 Output is printed *after* the writes, so the JSON reflects what `PIDController::setKp()` actually stored — including its clamp to `[PID_COEFF_MIN, PID_COEFF_MAX]` = `[0, 255]`. Note `SimpleSerialShell` caps a line at 10 tokens, so at most three `-K…` pairs plus two axis flags fit in one call.
 
+**`pid` is atomic.** It runs in three passes — collect `-reset`/`-save` flags, then *validate the whole line and queue the writes*, then apply. Nothing is touched until the line parses cleanly, so `pid -reset -height -Kp 2 -Ki abc` changes nothing at all rather than leaving you with a reset controller and a half-applied tuning step. Keep new options inside this structure: validation belongs in pass 2, side effects in pass 3.
+
+**Numeric arguments are validated**, by `parseFloatDe()` in `cli.cpp` — used by both `pid` and `setHeight`. It exists because bare `strtof()` returns `0.0f` for `"abc"`, so a typo like `-Kp o.5` would silently zero a coefficient. It rejects trailing garbage (`12abc`, `1.2.3`), bare signs, `nan`/`inf`, overflow, and over-long input, while accepting a German decimal comma, exponents, and leading `+`/`-`.
+
 Four things about this module are load-bearing and easy to break:
 
 - **No command name may start with `d`.** `cli::update()` pulls `d` out of the stream as a byte-instant emergency disarm *before* the shell sees it, so a command named `disarm` would fire on its first byte and leave `isarm` in the buffer — the same collision the old `CommChannel` had between `d` and `D=<value>`. Hence `stop`.
