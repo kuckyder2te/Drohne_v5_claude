@@ -83,7 +83,7 @@ The CLI is the firmware's only input path. It replaced `CommChannel`/`InputHandl
 | `pid [axis] [-Kp/-Ki/-Kd v] [-save] [-reset]` | read/write/persist all PID coefficients — see below |
 | `setHeight <cm>` / `getHeight` | clamped to `[THROTTLE_MIN_CM, MAX_HEIGHT_CM]` |
 | `getArmed` | flight state |
-| `help` | built into the library; lists everything |
+| `help` | command list + the immediate-key chapter — see below |
 
 **`pid`** replaced nine `setK*Height`/`Roll`/`Pitch` setters plus `getPid`, `save` and `reset` with one command. `pid -h` prints its own option help.
 
@@ -112,6 +112,7 @@ Four things about this module are load-bearing and easy to break:
 
 - **No command name may start with `d`.** `cli::update()` pulls `d` out of the stream as a byte-instant emergency disarm *before* the shell sees it, so a command named `disarm` would fire on its first byte and leave `isarm` in the buffer — the same collision the old `CommChannel` had between `d` and `D=<value>`. Hence `stop`.
 - **`d`/`+`/`-` are only intercepted at the start of a line**, tracked via the `atLineStart` flag. Mid-line they belong to an argument — otherwise `setHeight -10` would lose its minus sign. A 5 s idle timeout calls `shell.resetBuffer()` so an abandoned partial line can't leave the emergency stop disarmed.
+- **`help` is shadowed, not replaced.** `cmdHelp` re-registers the name `help`; `addCommand()` inserts an equal name *ahead* of the existing entry and `execute()` takes the first match, so the custom one wins. It calls the library's `SimpleSerialShell::printHelp()` for the generated command list and appends the immediate-key chapter — those keys can never appear in the generated list because they aren't shell commands. Known cosmetic wart: the listing shows **two** `help` lines, the custom one and the library's built-in. `SimpleSerialShell` has no `removeCommand()` and `firstCommand` is private, so the stale entry can't be hidden without patching a managed dependency.
 - **Command feedback goes through `shell.print*()`**, so it always returns on the channel the command arrived on. `LOG()` is separate and goes wherever `_SERIAL_LOG`/`_BT_LOG` point — the two are deliberately decoupled.
 - The shell is a **singleton with a single `attach()` stream** (USB *or* BT, never both — hence the `CLI_USE_BLUETOOTH` switch), matches command names **case-insensitively** (`strncasecmp`), and terminates a line on `\r` **or `;`** — the latter exists specifically for BT/BLE apps that can't send Enter, which is what makes running the CLI over `Serial1` practical.
 

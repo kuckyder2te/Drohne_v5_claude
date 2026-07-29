@@ -158,6 +158,38 @@ namespace {
         return 0;
     }
 
+    // Ueberschattet das eingebaute "help" der Bibliothek: addCommand() haengt
+    // bei Namensgleichheit VOR den bestehenden Eintrag, und execute() nimmt
+    // den ersten Treffer. So laesst sich die generierte Kommandoliste
+    // weiterverwenden und um die Sofort-Tasten ergaenzen, die in ihr gar
+    // nicht auftauchen koennen - sie sind keine Shell-Kommandos.
+    int cmdHelp(int argc, char **argv) {
+        SimpleSerialShell::printHelp(argc, argv);
+
+        shell.println();
+        shell.println(F("Sofort-Tasten (einzelne Taste, ohne Enter):"));
+        shell.println(F("  d   DISARM - Motoren sofort auf Minimum ('D' ebenso)"));
+        shell.println(F("  +   Zielhoehe um 10 cm erhoehen"));
+        shell.println(F("  -   Zielhoehe um 10 cm verringern"));
+        shell.println();
+        shell.println(F("Diese drei Zeichen werden vor der Shell aus dem Datenstrom"));
+        shell.println(F("gefischt und wirken daher schon beim Tastendruck, ohne Enter"));
+        shell.println(F("und ohne Zeilenende. Gedacht ist das als Not-Aus, der im"));
+        shell.println(F("Ernstfall nicht erst eine Zeile zu Ende getippt haben will."));
+        shell.println(F("Mehrfach druecken addiert sich: '+++' sind +30 cm."));
+        shell.println();
+        shell.println(F("Sie gelten NUR am Zeilenanfang. Mitten in einer Eingabe sind"));
+        shell.println(F("es gewoehnliche Zeichen - sonst wuerde 'setHeight -10' sein"));
+        shell.println(F("Minus verlieren. Wurde eine Zeile angefangen und nicht"));
+        shell.println(F("abgeschickt, verwirft die CLI sie nach 5 s ohne weitere"));
+        shell.println(F("Eingabe, damit der Not-Aus wieder scharf ist."));
+        shell.println(F("Aus demselben Grund faengt kein Kommandoname mit 'd' an;"));
+        shell.println(F("DISARM heisst als Kommando deshalb 'stop'."));
+        shell.println();
+        shell.println(F("Optionen einzelner Kommandos: 'pid -h'"));
+        return 0;
+    }
+
     // ── Werte (setX/getX) ──────────────────────────────────────
 
     int cmdSetHeight(int argc, char **argv) {
@@ -351,6 +383,9 @@ namespace cli {
         // update() byte-sofort als Not-Aus abgefangen, bevor die Shell es
         // sieht - ein Befehl "disarm" wuerde daher schon beim ersten Byte
         // ausloesen und "isarm" im Puffer hinterlassen. Deshalb "stop".
+        // Muss vor der eingebauten Liste stehen -> siehe cmdHelp()
+        shell.addCommand(F("help - Kommandos und Sofort-Tasten"), cmdHelp);
+
         shell.addCommand(F("arm - ARM (2x innerhalb 3 s bestaetigen)"), cmdArm);
         shell.addCommand(F("stop - DISARM, Motoren sofort stoppen"), cmdStop);
         shell.addCommand(F("recalibrate - Barometer rekalibrieren (nur disarmt)"), cmdRecalibrate);
