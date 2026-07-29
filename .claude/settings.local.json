@@ -33,7 +33,8 @@
       "Bash(pio run *)",
       "PowerShell(pio run 2>&1)",
       "PowerShell($candidates = @\\(\"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\platformio.exe\", \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\"\\); foreach \\($c in $candidates\\) { Test-Path $c })",
-      "PowerShell(& \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run 2>&1 | Select-Object -Last 80)"
+      "PowerShell(& \"$env:USERPROFILE\\\\.platformio\\\\penv\\\\Scripts\\\\pio.exe\" run 2>&1 | Select-Object -Last 80)",
+      "Bash(find . -maxdepth 3 -type d -not -path \"*/\\\\.*\" -not -path \"*/.pio*\")"
     ]
   }
 }
