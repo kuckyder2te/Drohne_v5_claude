@@ -3,7 +3,7 @@
 //
 // Befehle kommen ueber BT_UART (Serial1/HC-06), nicht ueber USB-Serial -
 // das entspricht dem bisherigen Verhalten (Motor-Rohbefehle liefen schon
-// immer direkt ueber Serial1, unabhaengig von COMM_USE_BLUETOOTH).
+// immer direkt ueber Serial1, unabhaengig von CLI_USE_BLUETOOTH).
 #include <Arduino.h>
 #include "myLogger.h"
 #include "config.h"
@@ -12,8 +12,8 @@
 #include "Battery.h"
 
 // Minimale dlog()-Implementierung: schreibt direkt auf Serial, ohne
-// CommChannel/PIDController/Settings zu benoetigen (die braucht nur die
-// normale Firmware in src/myLogger.cpp).
+// den restlichen src/-Baum zu benoetigen (die normale Firmware loggt
+// dagegen ueber src/myLogger.cpp nach Serial und/oder BT_UART).
 void dlog(const String &msg)
 {
     Serial.println(msg);

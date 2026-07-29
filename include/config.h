@@ -1,12 +1,16 @@
 #pragma once
 
 // ── Debug Ausgabe ──────────────────────────────────────────
-#define _SERIAL_LOG
-//#define _BT_LOG
+// Ziel der LOG()/LOG_FMT()-Ausgaben, beides gleichzeitig moeglich.
+// Unabhaengig davon, wo die CLI-Shell haengt (siehe CLI_USE_BLUETOOTH).
+//#define _SERIAL_LOG   // USB Serial
+#define _BT_LOG         // BT-UART (Serial1)
 
-// ── Kommunikationskanal (genau einen aktivieren) ────────────
-// Aktiv: comm nutzt Serial1 (BT-UART). Auskommentiert: comm nutzt Serial (USB).
-#define COMM_USE_BLUETOOTH
+// ── Kanal der CLI-Shell ────────────────────────────────────
+// Die Shell (SimpleSerialShell) ist ein Singleton mit genau EINEM Stream.
+// Aktiv: CLI liegt auf Serial1 (BT-UART). Auskommentiert: CLI liegt auf
+// Serial (USB) - dann funktioniert auch der serial-cli-test-Skill (COM11).
+//#define CLI_USE_BLUETOOTH
 
 // ── Betriebsmodus ────────────────────────────────────────────
 // Die Firmware kennt nur noch den Normalbetrieb (Flugbetrieb, siehe

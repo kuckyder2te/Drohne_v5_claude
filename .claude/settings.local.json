@@ -37,7 +37,12 @@
       "Bash(find . -maxdepth 3 -type d -not -path \"*/\\\\.*\" -not -path \"*/.pio*\")",
       "Bash(~/.platformio/penv/Scripts/pio.exe run *)",
       "Bash(~/.platformio/penv/Scripts/pio.exe device *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git rm *)",
+      "Bash(grep -n \"CommChannel\\\\|InputHandler\\\\|KeyEvent\\\\|comm->\\\\|\\\\`comm\\\\`\" CLAUDE.md)",
+      "Bash(perl -pi -e 's/COMM_USE_BLUETOOTH/CLI_USE_BLUETOOTH/g' src/myLogger.cpp src/tools/test_motors/MotorTest.cpp src/tools/test_motors_single/MotorSingleTest.cpp include/comm/cli.h CLAUDE.md)"
     ]
   }
 }

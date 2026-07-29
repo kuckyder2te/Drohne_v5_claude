@@ -9,7 +9,7 @@
 
 // Reine C-Funktionszeiger (SimpleSerialShell::CommandFunction) koennen keinen
 // Zustand einfangen - Zugriff auf die in src/mode/NormalMode.cpp definierten
-// Globalen daher wie in InputHandler.cpp/myLogger.cpp ueber extern.
+// Globalen daher ueber extern.
 extern FlightController flightController;
 extern Settings         settings;
 extern Barometer        baro;
@@ -25,12 +25,11 @@ namespace {
     uint32_t lastByteMs  = 0;
     constexpr uint32_t IDLE_RESET_MS = 5000;
 
-    // Quittungen laufen ueber shell.print*(), NICHT ueber LOG(): dlog() schreibt
-    // an comm, und comm liegt wegen COMM_USE_BLUETOOTH auf BT - auf USB waere
-    // sonst nichts von den Befehlen zu sehen.
+    // Quittungen laufen ueber shell.print*(), damit sie immer auf dem Kanal
+    // landen, von dem der Befehl kam. LOG() geht daneben unabhaengig davon
+    // an Serial und/oder BT_UART (Flags _SERIAL_LOG/_BT_LOG in config.h).
 
-    // Komma als Dezimaltrennzeichen akzeptieren (deutsche Tastatur), wie
-    // CommChannel::processCommand() es tut.
+    // Komma als Dezimaltrennzeichen akzeptieren (deutsche Tastatur).
     float parseFloatDe(const char *s) {
         char buf[16];
         strncpy(buf, s, sizeof(buf) - 1);
@@ -204,6 +203,13 @@ namespace cli {
         shell.addCommand(F("setKdPitch wert - Pitch Kd"), cmdSetKdPitch);
 
         shell.attach(stream);
+
+        // Lebenszeichen auf dem Shell-Kanal: LOG() geht je nach
+        // _SERIAL_LOG/_BT_LOG ggf. woandershin, dann waere hier sonst nichts
+        // zu sehen und der Kanal wirkte tot.
+        shell.println();
+        shell.println(F("[CLI] bereit - 'help' listet alle Befehle"));
+        shell.println(F("[CLI] sofort ohne Enter: d = DISARM, +/- = Zielhoehe +/-10 cm"));
     }
 
     bool update() {

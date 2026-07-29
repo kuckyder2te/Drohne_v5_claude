@@ -27,6 +27,6 @@ Alternativ: PlatformIO-Sidebar in VS Code -> Project Tasks -> gewuenschte
 test_<name>-Umgebung -> Upload.
 
 Das fruehere in-Firmware TEST_KEYBOARD (Tastatur-/CLI-Eingabe) hat kein eigenes
-Tool: es haengt eng an CommChannel/PIDController/Settings (im restlichen src/)
-und laesst sich nicht sinnvoll isolieren - die Tastatur-/PID-Tuning-Eingabe
-testet der Normalbetrieb der eigentlichen Firmware.
+Tool: es haengt eng an der CLI/PIDController/Settings (im restlichen src/) und
+laesst sich nicht sinnvoll isolieren - die Bedien- und PID-Tuning-Eingabe testet
+der Normalbetrieb der eigentlichen Firmware (Shell-Befehl "help").

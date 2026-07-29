@@ -9,8 +9,8 @@
 #include "Battery.h"
 
 // Minimale dlog()-Implementierung: schreibt direkt auf Serial, ohne
-// CommChannel/PIDController/Settings zu benoetigen (die braucht nur die
-// normale Firmware in src/myLogger.cpp).
+// den restlichen src/-Baum zu benoetigen (die normale Firmware loggt
+// dagegen ueber src/myLogger.cpp nach Serial und/oder BT_UART).
 void dlog(const String &msg)
 {
     Serial.println(msg);

@@ -2,26 +2,22 @@
 
 #include <Arduino.h>
 
-// Duennes Wrapper-Modul um philj404/SimpleSerialShell. Bietet inzwischen alle
-// Befehle von comm/CommChannel.h an, koexistiert aber weiterhin mit ihm
-// (ersetzt es noch nicht) - schrittweise Umstellung der Bedienung auf eine
-// reine CLI. Benennung: Aktionen als Verben (arm, stop, recalibrate, save,
-// reset, statusLog), Werte als setX/getX (setHeight, setKpRoll, getPid, ...).
+// Duennes Wrapper-Modul um philj404/SimpleSerialShell - die alleinige
+// Bedienoberflaeche der Firmware (loest den frueheren CommChannel samt
+// InputHandler/KeyEvent ab). Benennung: Aktionen als Verben (arm, stop,
+// recalibrate, save, reset, statusLog), Werte als setX/getX (setHeight,
+// setKpRoll, getPid, ...).
 namespace cli {
     // Registriert alle CLI-Befehle und bindet die Shell an `stream`.
-    // `stream` ist derselbe Stream, an den auch der aktive CommChannel
-    // gebunden ist (Serial oder Serial1, Auswahl per COMM_USE_BLUETOOTH in
-    // config.h) - es ist nie mehr als ein physischer Stream gleichzeitig
-    // aktiv, daher genuegt ein einmaliges attach() fuer die gesamte Laufzeit.
+    // Die Shell ist ein Singleton mit genau EINEM Stream (Serial oder
+    // Serial1, Auswahl per CLI_USE_BLUETOOTH in config.h), daher genuegt
+    // ein einmaliges attach() fuer die gesamte Laufzeit.
     void begin(Stream &stream);
 
-    // Einmal pro loop()-Durchlauf aufrufen, VOR comm->getKey().
+    // Einmal pro loop()-Durchlauf aufrufen.
     // Rueckgabe true, wenn in diesem Durchlauf Bytes verarbeitet wurden
-    // (Not-Aus-Taste, fertige Kommandozeile oder Teilzeile im Puffer).
-    //
-    // Solange COMM_USE_BLUETOOTH gesetzt ist, liegt die CLI auf USB und comm
-    // auf BT - beide Parser konkurrieren dann nicht um dieselben Bytes, der
-    // Rueckgabewert muss vom Aufrufer also nicht ausgewertet werden.
+    // (Not-Aus-Taste, fertige Kommandozeile oder Teilzeile im Puffer); der
+    // Rueckgabewert ist rein informativ, NormalMode wertet ihn nicht aus.
     //
     // Fischt 'd' (Not-Aus), '+' und '-' vor der Shell aus dem Stream, damit
     // sie ohne Enter wirken - aber nur am Zeilenanfang, sonst verschwaende
