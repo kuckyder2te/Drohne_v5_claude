@@ -6,7 +6,8 @@
 // Bedienoberflaeche der Firmware (loest den frueheren CommChannel samt
 // InputHandler/KeyEvent ab). Benennung: Aktionen als Verben (arm, stop,
 // recalibrate, save, reset, statusLog), Werte als setX/getX (setHeight,
-// setKpRoll, getPid, ...).
+// getHeight, getArmed). Die PID-Koeffizienten laufen ueber das eigene
+// Kommando "pid" mit Optionen (siehe pidHelp() in cli.cpp).
 namespace cli {
     // Registriert alle CLI-Befehle und bindet die Shell an `stream`.
     // Die Shell ist ein Singleton mit genau EINEM Stream (Serial oder

@@ -65,7 +65,7 @@ The firmware implements a **cascaded PID altitude + attitude stabilizer** for a 
 | [lib/Barometer/Barometer.cpp](lib/Barometer/Barometer.cpp) | MS5611 (0x77); needs a 90 s warmup + calibration before it's trustworthy; ring-buffer filter; `BARO_TEMP_COEFF` compensates thermal drift; expects `Wire` already initialized by its caller |
 | [lib/Ultrasonic/Ultrasonic.cpp](lib/Ultrasonic/Ultrasonic.cpp) | HC-SR04 on pins 8/6; valid range ~2–300 cm; preferred altitude source over barometer whenever `isValid()` |
 | [lib/Battery/Battery.cpp](lib/Battery/Battery.cpp) | ADC pin 26, voltage divider; warns/critical via buzzer pin 10 |
-| [src/comm/cli.cpp](src/comm/cli.cpp) | The firmware's sole input path — a `SimpleSerialShell`-based CLI bound to `Serial1` or `Serial` per `CLI_USE_BLUETOOTH`. Naming: verbs for actions (`arm`, `stop`, `recalibrate`, `save`, `reset`, `statusLog`), `setX`/`getX` for values (`setHeight`, `setKpRoll`, `getPid`, …). See the CLI section below for the `d` naming constraint. |
+| [src/comm/cli.cpp](src/comm/cli.cpp) | The firmware's sole input path — a `SimpleSerialShell`-based CLI bound to `Serial1` or `Serial` per `CLI_USE_BLUETOOTH`. Naming: verbs for actions (`arm`, `stop`, `recalibrate`, `save`, `reset`, `statusLog`), `setX`/`getX` for values (`setHeight`, `getHeight`, `getArmed`), and one option-parsing command (`pid`). See the CLI section below for the `d` naming constraint. |
 | [src/storage/Settings.cpp](src/storage/Settings.cpp) | EEPROM persistence for height PID Kp/Ki/Kd, validity marker byte |
 | [src/control/FlightController.cpp](src/control/FlightController.cpp) | Owns flight state (`armed`, `targetHeightCm`, status-log/arm-pending timers), the three `PIDController` instances, and `MotorMixer`; provides `requestArm()`/`disarm()`/`recalibrate()`/`adjustTargetHeight()`/`toggleStatusLog()`, the safety check (`checkSafety()`), the PID+mixing loop (`updateControlLoop()`) and the status log (`logStatus()`) — the flight-control logic that used to live directly in `main.cpp::loop()` |
 | [src/mode/NormalMode.cpp](src/mode/NormalMode.cpp) | Firmware composition root / sole entry point: defines the shared globals, does CLI + sensor init in `setup()`, runs the control loop in `loop()` (`cli::update()`, sensor updates, `FlightController::checkSafety()`/`updateArmPendingTimeout()`/`updateControlLoop()`/`logStatus()`). `main.cpp` just forwards to it |
@@ -81,10 +81,22 @@ The CLI is the firmware's only input path. It replaced `CommChannel`/`InputHandl
 | `arm` / `stop` | `arm` twice within 3 s to arm; `stop` disarms |
 | `recalibrate` / `statusLog` | recalibrate only while disarmed |
 | `save` / `reset` | height PID to/from EEPROM |
-| `getPid` / `getArmed` | `getPid` prints all nine coefficients |
+| `pid [axis] [-Kp/-Ki/-Kd v]` | read/write all PID coefficients — see below |
 | `setHeight <cm>` / `getHeight` | clamped to `[THROTTLE_MIN_CM, MAX_HEIGHT_CM]` |
-| `setKpHeight` `setKiHeight` `setKdHeight` | also `…Roll` and `…Pitch` variants — nine setters total |
+| `getArmed` | flight state |
 | `help` | built into the library; lists everything |
+
+**`pid`** replaced nine `setK*Height`/`Roll`/`Pitch` setters plus `getPid` with one command. `pid -h` prints its own option help.
+
+```
+pid                              → {"height":{...},"roll":{...},"pitch":{...}}
+pid -height                      → {"height":{"Kp":2.0000,"Ki":0.0000,"Kd":0.0000}}
+pid -height -Kd 10               set one coefficient
+pid -height -Kd 10.1 -Ki 1 -Kp 0.1   several at once
+pid -height -Kp 2 -roll -Kp 1    several axes in one call
+```
+
+The axis is *stateful*: it applies to every following `-K…` option, which is what allows more than one controller per call. There is deliberately **no default axis** — a `-Kp` before any axis flag is an error rather than silently landing in the height controller. Options compare case-insensitively and accept a German decimal comma. Output is always the axes that were named (all three when none were), printed *after* the writes, so the JSON reflects the value `PIDController::setKp()` actually stored — including its clamp to `[PID_COEFF_MIN, PID_COEFF_MAX]` = `[0, 255]`. Note `SimpleSerialShell` caps a line at 10 tokens, so at most three `-K…` pairs plus two axis flags fit in one call.
 
 Four things about this module are load-bearing and easy to break:
 

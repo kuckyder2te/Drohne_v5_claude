@@ -39,32 +39,40 @@ namespace {
         return strtof(buf, nullptr);
     }
 
-    // Gemeinsamer Rumpf aller neun Koeffizienten-Setter; 'which' waehlt
-    // Kp/Ki/Kd. Die Kommandos selbst bleiben dadurch Einzeiler.
-    int setCoeff(int argc, char **argv, PIDController &pid, char which, const char *label) {
-        if (argc < 2) {
-            shell.print(F("usage: "));
-            shell.print(argv[0]);
-            shell.println(F(" <wert>"));
-            return -1;
+    // ── Achsen fuer das "pid"-Kommando ─────────────────────────
+    enum { AX_HEIGHT = 0, AX_ROLL, AX_PITCH, AX_COUNT };
+
+    const char *axisName(int ax) {
+        switch (ax) {
+            case AX_HEIGHT: return "height";
+            case AX_ROLL:   return "roll";
+            default:        return "pitch";
         }
-        float v = parseFloatDe(argv[1]);
-        switch (which) {
-            case 'P': pid.setKp(v); break;
-            case 'I': pid.setKi(v); break;
-            case 'D': pid.setKd(v); break;
-        }
-        shell.print(label);
-        shell.print('=');
-        shell.println(v, 4);
-        return 0;
     }
 
-    void printCoeffs(const char *label, PIDController &pid) {
-        shell.print(label);
-        shell.print(F(" Kp=")); shell.print(pid.getKp(), 4);
-        shell.print(F(" Ki=")); shell.print(pid.getKi(), 4);
-        shell.print(F(" Kd=")); shell.println(pid.getKd(), 4);
+    PIDController &axisPid(int ax) {
+        switch (ax) {
+            case AX_HEIGHT: return flightController.getPidHeight();
+            case AX_ROLL:   return flightController.getPidRoll();
+            default:        return flightController.getPidPitch();
+        }
+    }
+
+    // Optionen case-insensitiv vergleichen: '-Kd', '-kd' und '-KD' sind
+    // gleichwertig, wie auch die Kommandonamen der Shell selbst.
+    bool optIs(const char *arg, const char *name) {
+        return strcasecmp(arg, name) == 0;
+    }
+
+    // Ein Achsen-Objekt als JSON-Fragment, ohne umschliessende Klammern.
+    void printAxisJson(int ax) {
+        PIDController &p = axisPid(ax);
+        shell.print('"');
+        shell.print(axisName(ax));
+        shell.print(F("\":{\"Kp\":"));  shell.print(p.getKp(), 4);
+        shell.print(F(",\"Ki\":"));     shell.print(p.getKi(), 4);
+        shell.print(F(",\"Kd\":"));     shell.print(p.getKd(), 4);
+        shell.print('}');
     }
 
     void printTargetHeight() {
@@ -151,22 +159,88 @@ namespace {
         return 0;
     }
 
-    int cmdGetPid(int /*argc*/, char ** /*argv*/) {
-        printCoeffs("Hoehe", flightController.getPidHeight());
-        printCoeffs("Roll ", flightController.getPidRoll());
-        printCoeffs("Pitch", flightController.getPidPitch());
-        return 0;
+    void pidHelp() {
+        shell.println(F("pid - PID-Koeffizienten anzeigen und setzen"));
+        shell.println(F("usage: pid [-height|-roll|-pitch] [-Kp <w>] [-Ki <w>] [-Kd <w>]"));
+        shell.println(F("  pid                       alle Regler als JSON"));
+        shell.println(F("  pid -height               nur den Hoehenregler als JSON"));
+        shell.println(F("  pid -height -Kd 10        Kd des Hoehenreglers setzen"));
+        shell.println(F("  pid -roll -Kp 1,2 -Ki 0.1 mehrere Koeffizienten auf einmal"));
+        shell.println(F("  pid -height -Kp 2 -roll -Kp 1   mehrere Achsen je Aufruf"));
+        shell.println(F("Die Achse gilt fuer alle folgenden -K-Optionen und muss vor"));
+        shell.println(F("ihnen stehen. Optionen sind case-insensitiv, Komma als"));
+        shell.println(F("Dezimaltrenner ist erlaubt. Ausgegeben werden die genannten"));
+        shell.println(F("Achsen - ohne Achsenangabe alle."));
     }
 
-    int cmdSetKpHeight(int c, char **v) { return setCoeff(c, v, flightController.getPidHeight(), 'P', "Hoehe Kp"); }
-    int cmdSetKiHeight(int c, char **v) { return setCoeff(c, v, flightController.getPidHeight(), 'I', "Hoehe Ki"); }
-    int cmdSetKdHeight(int c, char **v) { return setCoeff(c, v, flightController.getPidHeight(), 'D', "Hoehe Kd"); }
-    int cmdSetKpRoll  (int c, char **v) { return setCoeff(c, v, flightController.getPidRoll(),   'P', "Roll Kp");  }
-    int cmdSetKiRoll  (int c, char **v) { return setCoeff(c, v, flightController.getPidRoll(),   'I', "Roll Ki");  }
-    int cmdSetKdRoll  (int c, char **v) { return setCoeff(c, v, flightController.getPidRoll(),   'D', "Roll Kd");  }
-    int cmdSetKpPitch (int c, char **v) { return setCoeff(c, v, flightController.getPidPitch(),  'P', "Pitch Kp"); }
-    int cmdSetKiPitch (int c, char **v) { return setCoeff(c, v, flightController.getPidPitch(),  'I', "Pitch Ki"); }
-    int cmdSetKdPitch (int c, char **v) { return setCoeff(c, v, flightController.getPidPitch(),  'D', "Pitch Kd"); }
+    // Loest die frueheren neun setK*-Kommandos und getPid ab. Die Achse ist
+    // zustandsbehaftet: sie gilt fuer alle nachfolgenden -K-Optionen, daher
+    // laesst sich in einem Aufruf auch mehr als ein Regler stellen.
+    int cmdPid(int argc, char **argv) {
+        if (argc >= 2 && optIs(argv[1], "-h")) {
+            pidHelp();
+            return 0;
+        }
+
+        bool selected[AX_COUNT] = {false, false, false};
+        bool anySelected = false;
+        int  current     = -1;   // aktuelle Achse, -1 = noch keine gewaehlt
+
+        for (int i = 1; i < argc; ++i) {
+            const char *a = argv[i];
+
+            int ax = -1;
+            if      (optIs(a, "-height")) ax = AX_HEIGHT;
+            else if (optIs(a, "-roll"))   ax = AX_ROLL;
+            else if (optIs(a, "-pitch"))  ax = AX_PITCH;
+
+            if (ax >= 0) {
+                current = ax;
+                selected[ax] = true;
+                anySelected  = true;
+                continue;
+            }
+
+            bool isKp = optIs(a, "-Kp");
+            bool isKi = optIs(a, "-Ki");
+            bool isKd = optIs(a, "-Kd");
+            if (isKp || isKi || isKd) {
+                // Bewusst keine Vorgabe-Achse: sonst landet ein vergessenes
+                // -height still im Hoehenregler statt im gemeinten.
+                if (current < 0) {
+                    shell.println(F("pid: erst Achse waehlen (-height, -roll oder -pitch)"));
+                    return -1;
+                }
+                if (i + 1 >= argc) {
+                    shell.print(F("pid: Wert fehlt nach "));
+                    shell.println(a);
+                    return -1;
+                }
+                float v = parseFloatDe(argv[++i]);
+                PIDController &p = axisPid(current);
+                if      (isKp) p.setKp(v);
+                else if (isKi) p.setKi(v);
+                else           p.setKd(v);
+                continue;
+            }
+
+            shell.print(F("pid: unbekannte Option "));
+            shell.println(a);
+            shell.println(F("pid -h fuer Hilfe"));
+            return -1;
+        }
+
+        shell.print('{');
+        bool first = true;
+        for (int ax = 0; ax < AX_COUNT; ++ax) {
+            if (anySelected && !selected[ax]) continue;
+            if (!first) shell.print(',');
+            printAxisJson(ax);
+            first = false;
+        }
+        shell.println('}');
+        return 0;
+    }
 }
 
 namespace cli {
@@ -190,17 +264,7 @@ namespace cli {
         shell.addCommand(F("setHeight cm - Zielhoehe setzen"), cmdSetHeight);
         shell.addCommand(F("getHeight - Zielhoehe ausgeben"), cmdGetHeight);
         shell.addCommand(F("getArmed - Flugzustand ausgeben"), cmdGetArmed);
-        shell.addCommand(F("getPid - alle PID-Koeffizienten ausgeben"), cmdGetPid);
-
-        shell.addCommand(F("setKpHeight wert - Hoehe Kp"), cmdSetKpHeight);
-        shell.addCommand(F("setKiHeight wert - Hoehe Ki"), cmdSetKiHeight);
-        shell.addCommand(F("setKdHeight wert - Hoehe Kd"), cmdSetKdHeight);
-        shell.addCommand(F("setKpRoll wert - Roll Kp"), cmdSetKpRoll);
-        shell.addCommand(F("setKiRoll wert - Roll Ki"), cmdSetKiRoll);
-        shell.addCommand(F("setKdRoll wert - Roll Kd"), cmdSetKdRoll);
-        shell.addCommand(F("setKpPitch wert - Pitch Kp"), cmdSetKpPitch);
-        shell.addCommand(F("setKiPitch wert - Pitch Ki"), cmdSetKiPitch);
-        shell.addCommand(F("setKdPitch wert - Pitch Kd"), cmdSetKdPitch);
+        shell.addCommand(F("pid - PID anzeigen/setzen, 'pid -h' fuer Optionen"), cmdPid);
 
         shell.attach(stream);
 

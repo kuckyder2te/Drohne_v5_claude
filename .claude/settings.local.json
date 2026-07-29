@@ -42,7 +42,8 @@
       "Bash(git push *)",
       "Bash(git rm *)",
       "Bash(grep -n \"CommChannel\\\\|InputHandler\\\\|KeyEvent\\\\|comm->\\\\|\\\\`comm\\\\`\" CLAUDE.md)",
-      "Bash(perl -pi -e 's/COMM_USE_BLUETOOTH/CLI_USE_BLUETOOTH/g' src/myLogger.cpp src/tools/test_motors/MotorTest.cpp src/tools/test_motors_single/MotorSingleTest.cpp include/comm/cli.h CLAUDE.md)"
+      "Bash(perl -pi -e 's/COMM_USE_BLUETOOTH/CLI_USE_BLUETOOTH/g' src/myLogger.cpp src/tools/test_motors/MotorTest.cpp src/tools/test_motors_single/MotorSingleTest.cpp include/comm/cli.h CLAUDE.md)",
+      "Bash(~/.platformio/penv/Scripts/python.exe \"C:/Users/willy/AppData/Local/Temp/claude/h--hobby-Projekte-Drohne-VS-Code-Drohne-v5-Claude/65d19afe-fa29-420f-be4e-d92404a1a89f/scratchpad/pid_parser_check.py\")"
     ]
   }
 }
