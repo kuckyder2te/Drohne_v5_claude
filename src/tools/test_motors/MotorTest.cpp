@@ -11,13 +11,11 @@
 #include "MotorMixer.h"
 #include "Battery.h"
 
-// Minimale dlog()-Implementierung: schreibt direkt auf Serial, ohne
-// den restlichen src/-Baum zu benoetigen (die normale Firmware loggt
-// dagegen ueber src/myLogger.cpp nach Serial und/oder BT_UART).
-void dlog(const String &msg)
-{
-    Serial.println(msg);
-}
+// Formatierpuffer der *_FMT-Makros. src/myLogger.cpp wird in dieser
+// Umgebung nicht mitkompiliert (build_src_filter), die Definition muss
+// also hier stehen - auch lib/ nutzt die Makros. Groesse muss zu der
+// Deklaration in include/myLogger.h passen.
+char logBuf[160];
 
 MotorMixer motors;
 Battery battery;
@@ -25,23 +23,29 @@ uint16_t currentThrottle = ESC_MIN_US;
 
 void printMotorHelp()
 {
-    LOG("-----------------------------------------");
-    LOG(" MOTORTEST: + - s h");
-    LOG(" c = Kalibrierung: LiPo ZUERST trennen");
-    LOG(" k = MAX senden (dann LiPo anstecken)");
-    LOG(" m = MIN senden (Kalibrierung fertig)");
-    LOG("-----------------------------------------");
+    LOGGER_NOTICE("-----------------------------------------");
+    LOGGER_NOTICE(" MOTORTEST: + - s h");
+    LOGGER_NOTICE(" c = Kalibrierung: LiPo ZUERST trennen");
+    LOGGER_NOTICE(" k = MAX senden (dann LiPo anstecken)");
+    LOGGER_NOTICE(" m = MIN senden (Kalibrierung fertig)");
+    LOGGER_NOTICE("-----------------------------------------");
 }
 
 void setup()
 {
     Serial.begin(115200);
+
+    // Vorgabe der Bibliothek ist WARNING - ohne diese Zeile bliebe jede
+    // LOGGER_NOTICE-Ausgabe unsichtbar. Ausgabe laeuft ueber
+    // Logger::defaultLog nach Serial, eine eigene Ausgabefunktion
+    // braucht das Tool nicht.
+    Logger::setLogLevel(Logger::NOTICE);
     Serial1.setTX(PIN_BT_TX);
     Serial1.setRX(PIN_BT_RX);
     Serial1.begin(BT_BAUD);
     delay(2000);
 
-    LOG(">> Modus: MOTORTEST");
+    LOGGER_NOTICE(">> Modus: MOTORTEST");
     printMotorHelp();
     motors.begin();
     battery.begin();
@@ -60,7 +64,7 @@ void loop()
     if (millis() - lastBat >= 5000)
     {
         lastBat = millis();
-        LOG_FMT("[BAT] %.2fV", battery.getVoltage());
+        LOGGER_NOTICE_FMT("[BAT] %.2fV", battery.getVoltage());
     }
 
     char cmd = 0;
@@ -90,25 +94,25 @@ void loop()
             break;
         case 'c':
         case 'C':
-            LOG("[ESC] SCHRITT 1: Jetzt LiPo TRENNEN!");
-            LOG("[ESC] Dann 'k' druecken - Pico sendet danach MAX (2000us)");
-            LOG("[ESC] Erst nach 'k': LiPo wieder anstecken");
+            LOGGER_NOTICE("[ESC] SCHRITT 1: Jetzt LiPo TRENNEN!");
+            LOGGER_NOTICE("[ESC] Dann 'k' druecken - Pico sendet danach MAX (2000us)");
+            LOGGER_NOTICE("[ESC] Erst nach 'k': LiPo wieder anstecken");
             currentThrottle = ESC_MIN_US;
             motors.stop();
             break;
         case 'k':
         case 'K':
-            LOG("[ESC] SCHRITT 2: Sende MAX (2000us) - jetzt LiPo anstecken!");
+            LOGGER_NOTICE("[ESC] SCHRITT 2: Sende MAX (2000us) - jetzt LiPo anstecken!");
             currentThrottle = ESC_MAX_US;
             motors.setThrottle(currentThrottle);
-            LOG("[ESC] Warte auf ESC-Piepstoene, dann 'm' druecken");
+            LOGGER_NOTICE("[ESC] Warte auf ESC-Piepstoene, dann 'm' druecken");
             break;
         case 'm':
         case 'M':
-            LOG("[ESC] SCHRITT 3: Sende MIN (1000us)...");
+            LOGGER_NOTICE("[ESC] SCHRITT 3: Sende MIN (1000us)...");
             currentThrottle = ESC_MIN_US;
             motors.setThrottle(currentThrottle);
-            LOG("[ESC] Kalibrierung abgeschlossen (2x Pieps = OK)");
+            LOGGER_NOTICE("[ESC] Kalibrierung abgeschlossen (2x Pieps = OK)");
             break;
         }
     }

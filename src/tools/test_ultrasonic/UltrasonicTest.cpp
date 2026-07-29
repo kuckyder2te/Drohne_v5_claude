@@ -6,21 +6,25 @@
 #include "pins.h"
 #include "Ultrasonic.h"
 
-// Minimale dlog()-Implementierung: schreibt direkt auf Serial, ohne
-// den restlichen src/-Baum zu benoetigen (die normale Firmware loggt
-// dagegen ueber src/myLogger.cpp nach Serial und/oder BT_UART).
-void dlog(const String &msg)
-{
-    Serial.println(msg);
-}
+// Formatierpuffer der *_FMT-Makros. src/myLogger.cpp wird in dieser
+// Umgebung nicht mitkompiliert (build_src_filter), die Definition muss
+// also hier stehen - auch lib/ nutzt die Makros. Groesse muss zu der
+// Deklaration in include/myLogger.h passen.
+char logBuf[160];
 
 Ultrasonic ultrasonic;
 
 void setup()
 {
     Serial.begin(115200);
+
+    // Vorgabe der Bibliothek ist WARNING - ohne diese Zeile bliebe jede
+    // LOGGER_NOTICE-Ausgabe unsichtbar. Ausgabe laeuft ueber
+    // Logger::defaultLog nach Serial, eine eigene Ausgabefunktion
+    // braucht das Tool nicht.
+    Logger::setLogLevel(Logger::NOTICE);
     delay(2000);
-    LOG(">> Modus: ULTRASCHALL TEST");
+    LOGGER_NOTICE(">> Modus: ULTRASCHALL TEST");
     ultrasonic.begin();
 }
 
@@ -33,11 +37,11 @@ void loop()
         lastUltra = millis();
         if (ultrasonic.isValid())
         {
-            LOG_FMT("[ULTRA] Hoehe: %.1f cm", ultrasonic.getAltitudeCm());
+            LOGGER_NOTICE_FMT("[ULTRA] Hoehe: %.1f cm", ultrasonic.getAltitudeCm());
         }
         else
         {
-            LOG("[ULTRA] Kein Signal!");
+            LOGGER_NOTICE("[ULTRA] Kein Signal!");
         }
     }
 }

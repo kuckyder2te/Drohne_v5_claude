@@ -26,7 +26,7 @@ namespace {
     constexpr uint32_t IDLE_RESET_MS = 5000;
 
     // Quittungen laufen ueber shell.print*(), damit sie immer auf dem Kanal
-    // landen, von dem der Befehl kam. LOG() geht daneben unabhaengig davon
+    // landen, von dem der Befehl kam. LOGGER_NOTICE() geht daneben unabhaengig davon
     // an Serial und/oder BT_UART (Flags _SERIAL_LOG/_BT_LOG in config.h).
 
     // Parst eine Zahl, Komma wie Punkt als Dezimaltrenner (deutsche Tastatur).
@@ -153,7 +153,7 @@ namespace {
 
     int cmdStatusLog(int /*argc*/, char ** /*argv*/) {
         flightController.toggleStatusLog();
-        // Der Statuslog selbst laeuft per LOG() nach BT, nicht hierher.
+        // Der Statuslog selbst laeuft per LOGGER_NOTICE() nach BT, nicht hierher.
         shell.println(F("[CLI] Statuslog umgeschaltet (Ausgabe laeuft ueber BT)"));
         return 0;
     }
@@ -398,7 +398,7 @@ namespace cli {
 
         shell.attach(stream);
 
-        // Lebenszeichen auf dem Shell-Kanal: LOG() geht je nach
+        // Lebenszeichen auf dem Shell-Kanal: LOGGER_NOTICE() geht je nach
         // _SERIAL_LOG/_BT_LOG ggf. woandershin, dann waere hier sonst nichts
         // zu sehen und der Kanal wirkte tot.
         shell.println();

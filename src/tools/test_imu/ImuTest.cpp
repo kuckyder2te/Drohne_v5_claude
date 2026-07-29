@@ -6,27 +6,31 @@
 #include "pins.h"
 #include "IMU.h"
 
-// Minimale dlog()-Implementierung: schreibt direkt auf Serial, ohne
-// den restlichen src/-Baum zu benoetigen (die normale Firmware loggt
-// dagegen ueber src/myLogger.cpp nach Serial und/oder BT_UART).
-void dlog(const String &msg)
-{
-    Serial.println(msg);
-}
+// Formatierpuffer der *_FMT-Makros. src/myLogger.cpp wird in dieser
+// Umgebung nicht mitkompiliert (build_src_filter), die Definition muss
+// also hier stehen - auch lib/ nutzt die Makros. Groesse muss zu der
+// Deklaration in include/myLogger.h passen.
+char logBuf[160];
 
 IMU imu;
 
 void setup()
 {
     Serial.begin(115200);
+
+    // Vorgabe der Bibliothek ist WARNING - ohne diese Zeile bliebe jede
+    // LOGGER_NOTICE-Ausgabe unsichtbar. Ausgabe laeuft ueber
+    // Logger::defaultLog nach Serial, eine eigene Ausgabefunktion
+    // braucht das Tool nicht.
+    Logger::setLogLevel(Logger::NOTICE);
     delay(2000);
-    LOG(">> Modus: IMU TEST");
+    LOGGER_NOTICE(">> Modus: IMU TEST");
 
     delay(1000);
 
     if (!imu.begin(true))
     {
-        LOG("FEHLER: IMU! Programm gestoppt.");
+        LOGGER_NOTICE("FEHLER: IMU! Programm gestoppt.");
         while (true)
             delay(1000);
     }
@@ -39,7 +43,7 @@ void loop()
     if (millis() - lastIMU >= 100)
     {
         lastIMU = millis();
-        LOG_FMT("[IMU] Roll: %.1f  Pitch: %.1f  AccZ: %.2f  ready:%d",
+        LOGGER_NOTICE_FMT("[IMU] Roll: %.1f  Pitch: %.1f  AccZ: %.2f  ready:%d",
                 imu.getRoll(), imu.getPitch(), imu.getAccZ(), imu.isReady());
     }
 }

@@ -9,7 +9,7 @@ void Ultrasonic::begin()
     pinMode(PIN_ULTRASONIC_ECHO1, INPUT);
     digitalWrite(PIN_ULTRASONIC_TRIG1, LOW);
     delay(100);
-    LOG("[ULTRA] HC-SR04 bereit");
+    LOGGER_NOTICE("[ULTRA] HC-SR04 bereit");
 }
 
 void Ultrasonic::update()

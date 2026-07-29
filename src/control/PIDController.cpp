@@ -9,14 +9,14 @@ float PIDController::_clampCoeff(float val, const char *name)
 {
     if (val < PID_COEFF_MIN)
     {
-        LOG_FMT("[PID] WARNUNG: %s", name);             // Serial.print(name);
-        LOG_FMT(" zu klein → auf %.4f", PID_COEFF_MIN); // Serial.println(PID_COEFF_MIN, 4);
+        LOGGER_NOTICE_FMT("[PID] WARNUNG: %s", name);             // Serial.print(name);
+        LOGGER_NOTICE_FMT(" zu klein → auf %.4f", PID_COEFF_MIN); // Serial.println(PID_COEFF_MIN, 4);
         return PID_COEFF_MIN;
     }
     if (val > PID_COEFF_MAX)
     {
-        LOG_FMT("[PID] WARNUNG: %s", name);
-        LOG_FMT(" zu groß → auf %.4f", PID_COEFF_MAX);
+        LOGGER_NOTICE_FMT("[PID] WARNUNG: %s", name);
+        LOGGER_NOTICE_FMT(" zu groß → auf %.4f", PID_COEFF_MAX);
         return PID_COEFF_MAX;
     }
     return val;
@@ -28,10 +28,10 @@ void PIDController::begin()
     _ki = _clampCoeff(_ki, "Ki");
     _kd = _clampCoeff(_kd, "Kd");
     reset();
-    LOG("[PID] Regler initialisiert (eigene Implementierung)");
-    LOG_FMT("[PID] Kp=%.4f", _kp);
-    LOG_FMT("[PID] Ki=%.4f", _ki);
-    LOG_FMT("[PID] Kd=%.4f", _kd);
+    LOGGER_NOTICE("[PID] Regler initialisiert (eigene Implementierung)");
+    LOGGER_NOTICE_FMT("[PID] Kp=%.4f", _kp);
+    LOGGER_NOTICE_FMT("[PID] Ki=%.4f", _ki);
+    LOGGER_NOTICE_FMT("[PID] Kd=%.4f", _kd);
 }
 
 float PIDController::compute(float setpoint, float measured)
@@ -78,34 +78,34 @@ void PIDController::reset()
     _lastError    = 0.0f;
     _lastTime     = millis() / 1000.0f;
     _lastThrottle = _useOffset ? (float)ESC_MIN_US : 0.0f;
-    LOG("[PID] Reset");
+    LOGGER_NOTICE("[PID] Reset");
 }
 
 void PIDController::setKp(float kp)
 {
     _kp = _clampCoeff(kp, "Kp");
-    LOG_FMT("[PID] Kp=%.4f", _kp);
+    LOGGER_NOTICE_FMT("[PID] Kp=%.4f", _kp);
 }
 
 void PIDController::setKi(float ki)
 {
     _ki = _clampCoeff(ki, "Ki");
-    LOG_FMT("[PID] Ki=%.4f", _ki);
+    LOGGER_NOTICE_FMT("[PID] Ki=%.4f", _ki);
 }
 
 void PIDController::setKd(float kd)
 {
     _kd = _clampCoeff(kd, "Kd");
-    LOG_FMT("[PID] Kd=%.4f", _kd);
+    LOGGER_NOTICE_FMT("[PID] Kd=%.4f", _kd);
 }
 
 void PIDController::enableIntegral(bool enable)
 {
     if (_integralEnabled && !enable) {
         _integral = 0.0f; // Integral löschen beim Landen
-        LOG("[PID] Integral deaktiviert (Landung)");
+        LOGGER_NOTICE("[PID] Integral deaktiviert (Landung)");
     } else if (!_integralEnabled && enable) {
-        LOG("[PID] Integral aktiv (abgehoben)");
+        LOGGER_NOTICE("[PID] Integral aktiv (abgehoben)");
     }
     _integralEnabled = enable;
 }

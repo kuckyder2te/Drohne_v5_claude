@@ -6,13 +6,11 @@
 #include "config.h"
 #include "pins.h"
 
-// Minimale dlog()-Implementierung: schreibt direkt auf Serial, ohne
-// den restlichen src/-Baum zu benoetigen (die normale Firmware loggt
-// dagegen ueber src/myLogger.cpp nach Serial und/oder BT_UART).
-void dlog(const String &msg)
-{
-    Serial.println(msg);
-}
+// Formatierpuffer der *_FMT-Makros. src/myLogger.cpp wird in dieser
+// Umgebung nicht mitkompiliert (build_src_filter), die Definition muss
+// also hier stehen - auch lib/ nutzt die Makros. Groesse muss zu der
+// Deklaration in include/myLogger.h passen.
+char logBuf[160];
 
 namespace {
     void i2cBusRecovery()
@@ -54,13 +52,13 @@ namespace {
 
         if (!sdaOk)
         {
-            LOG("[I2C] FEHLER: SDA bleibt LOW nach Recovery!");
-            LOG("[I2C] -> Kurzschluss, defektes Geraet oder fehlendes Pull-up?");
-            LOG("[I2C] -> LiPo + USB trennen, 10s warten, neu starten.");
+            LOGGER_NOTICE("[I2C] FEHLER: SDA bleibt LOW nach Recovery!");
+            LOGGER_NOTICE("[I2C] -> Kurzschluss, defektes Geraet oder fehlendes Pull-up?");
+            LOGGER_NOTICE("[I2C] -> LiPo + USB trennen, 10s warten, neu starten.");
             return;
         }
 
-        LOG("[I2C] Scanne Bus...");
+        LOGGER_NOTICE("[I2C] Scanne Bus...");
         int found = 0;
         for (uint8_t addr = 1; addr < 127; addr++)
         {
@@ -72,20 +70,26 @@ namespace {
             if (Wire.available() < 1) continue;
             Wire.read();
 
-            LOG_FMT("[I2C] Gefunden: 0x%02X", addr);
+            LOGGER_NOTICE_FMT("[I2C] Gefunden: 0x%02X", addr);
             found++;
         }
         if (found == 0)
-            LOG("[I2C] Kein Geraet!");
-        LOG_FMT("[I2C] Gesamt: %d Geraet(e)", found);
+            LOGGER_NOTICE("[I2C] Kein Geraet!");
+        LOGGER_NOTICE_FMT("[I2C] Gesamt: %d Geraet(e)", found);
     }
 }
 
 void setup()
 {
     Serial.begin(115200);
+
+    // Vorgabe der Bibliothek ist WARNING - ohne diese Zeile bliebe jede
+    // LOGGER_NOTICE-Ausgabe unsichtbar. Ausgabe laeuft ueber
+    // Logger::defaultLog nach Serial, eine eigene Ausgabefunktion
+    // braucht das Tool nicht.
+    Logger::setLogLevel(Logger::NOTICE);
     delay(2000);
-    LOG(">> Modus: I2C SCAN TEST (alle 5 s)");
+    LOGGER_NOTICE(">> Modus: I2C SCAN TEST (alle 5 s)");
 }
 
 void loop()

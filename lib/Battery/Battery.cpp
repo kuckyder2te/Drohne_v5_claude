@@ -7,7 +7,7 @@ void Battery::begin()
     pinMode(BUZZER, OUTPUT);
     digitalWrite(BUZZER, LOW);
     analogReadResolution(12);
-    LOG("[BAT] Batterie-Ueberwachung gestartet");
+    LOGGER_NOTICE("[BAT] Batterie-Ueberwachung gestartet");
 }
 
 void Battery::update()

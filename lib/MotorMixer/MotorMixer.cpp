@@ -34,7 +34,7 @@ void MotorMixer::begin()
 
     stop();
     delay(2000);
-    LOG("[MOTOR] ESC Initialisierung abgeschlossen");
+    LOGGER_NOTICE("[MOTOR] ESC Initialisierung abgeschlossen");
 }
 
 void MotorMixer::setThrottle(uint16_t throttle_us)
@@ -44,13 +44,13 @@ void MotorMixer::setThrottle(uint16_t throttle_us)
     _writePWM(PIN_MOTOR_FR, _throttle_us);
     _writePWM(PIN_MOTOR_BL, _throttle_us);
     _writePWM(PIN_MOTOR_BR, _throttle_us);
-    LOG_FMT("[MOTOR] Throttle: %i µs", _throttle_us);
+    LOGGER_NOTICE_FMT("[MOTOR] Throttle: %i µs", _throttle_us);
 }
 
 void MotorMixer::stop()
 {
     setThrottle(ESC_MIN_US);
-    LOG("[MOTOR] STOP");
+    LOGGER_NOTICE("[MOTOR] STOP");
 }
 
 // ── Einzelmotor Test ───────────────────────────────────────
@@ -68,22 +68,22 @@ void MotorMixer::setSingle(uint8_t motor, uint16_t throttle)
     {
     case 1:
         _writePWM(PIN_MOTOR_FL, t);
-        LOG_FMT("[MOTOR] FL: %d us (PIN %d)", t, PIN_MOTOR_FL);
+        LOGGER_NOTICE_FMT("[MOTOR] FL: %d us (PIN %d)", t, PIN_MOTOR_FL);
         break;
     case 2:
         _writePWM(PIN_MOTOR_FR, t);
-        LOG_FMT("[MOTOR] FR: %d us (PIN %d)", t, PIN_MOTOR_FR);
+        LOGGER_NOTICE_FMT("[MOTOR] FR: %d us (PIN %d)", t, PIN_MOTOR_FR);
         break;
     case 3:
         _writePWM(PIN_MOTOR_BR, t);
-        LOG_FMT("[MOTOR] BR: %d us (PIN %d)", t, PIN_MOTOR_BR);
+        LOGGER_NOTICE_FMT("[MOTOR] BR: %d us (PIN %d)", t, PIN_MOTOR_BR);
         break;
     case 4:
         _writePWM(PIN_MOTOR_BL, t);
-        LOG_FMT("[MOTOR] BL: %d us (PIN %d)", t, PIN_MOTOR_BL);
+        LOGGER_NOTICE_FMT("[MOTOR] BL: %d us (PIN %d)", t, PIN_MOTOR_BL);
         break;
     default:
-        LOG("[MOTOR] Unbekannter Motor!");
+        LOGGER_NOTICE("[MOTOR] Unbekannter Motor!");
         break;
     }
 }

@@ -1,5 +1,6 @@
 #include "Barometer.h"
 #include "myLogger.h"
+#include "config.h"   // BARO_TEMP_COEFF - kam frueher transitiv ueber myLogger.h
 #include "pins.h"
 
 // MS5611 Kommandos
@@ -22,29 +23,29 @@ bool Barometer::begin()
     // Debug vor Reset
     // Wire.beginTransmission(MS5611_ADDR);
     // uint8_t err = Wire.endTransmission();
-    // LOG_FMT("[BARO] I2C Test vor Reset: %d", err);
+    // LOGGER_NOTICE_FMT("[BARO] I2C Test vor Reset: %d", err);
 
     // 2. Reset senden
     if (!_reset())
     {
-        LOG("[BARO] ERROR: Reset fehlgeschlagen!");
+        LOGGER_NOTICE("[BARO] ERROR: Reset fehlgeschlagen!");
         return false;
     }
 
     // 3. PROM lesen
     if (!_readPROM())
     {
-        LOG("[BARO] ERROR: PROM lesen fehlgeschlagen!");
+        LOGGER_NOTICE("[BARO] ERROR: PROM lesen fehlgeschlagen!");
         return false;
     }
 
 #ifdef TEST_BAROMETER
-    LOG_FMT("[BARO] C1=%u C2=%u C3=%u C4=%u C5=%u C6=%u",
+    LOGGER_NOTICE_FMT("[BARO] C1=%u C2=%u C3=%u C4=%u C5=%u C6=%u",
             _C1, _C2, _C3, _C4, _C5, _C6);
 
 #endif
 
-    LOG("[BARO] MS5611(MS5607) gefunden");
+    LOGGER_NOTICE("[BARO] MS5611(MS5607) gefunden");
     return true;
 }
 
@@ -73,7 +74,7 @@ bool Barometer::_readPROM()
         *C[i + 1] = ((uint16_t)Wire.read() << 8) | Wire.read();
 
         #ifdef TEST_BAROMETER
-        LOG_FMT("[BARO] C%d = %u", i + 1, *C[i + 1]);
+        LOGGER_NOTICE_FMT("[BARO] C%d = %u", i + 1, *C[i + 1]);
         #endif
     }
     return true;
@@ -137,7 +138,7 @@ void Barometer::update()
 
 void Barometer::calibrate()
 {
-    LOG("[BARO] Kalibrierung laeuft...");
+    LOGGER_NOTICE("[BARO] Kalibrierung laeuft...");
     float sum = 0.0f;
     const int samples = 20;
     for (int i = 0; i < samples; i++)
@@ -157,7 +158,7 @@ void Barometer::calibrate()
     _filterIdx = 0;      // ← hinzufügen!
     _filterFull = false; // ← false statt true!
 
-    LOG_FMT("[BARO] Referenzdruck: %.2f hPa", _refPressure);
+    LOGGER_NOTICE_FMT("[BARO] Referenzdruck: %.2f hPa", _refPressure);
 }
 
 float Barometer::_applyFilter(float newValue)

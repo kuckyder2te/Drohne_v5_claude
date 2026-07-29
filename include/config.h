@@ -1,9 +1,9 @@
 #pragma once
 
 // ── Debug Ausgabe ──────────────────────────────────────────
-// Ziel der LOG()/LOG_FMT()-Ausgaben, beides gleichzeitig moeglich.
+// Ziel der LOGGER_NOTICE()/LOGGER_NOTICE_FMT()-Ausgaben, beides gleichzeitig moeglich.
 // Unabhaengig davon, wo die CLI-Shell haengt (siehe CLI_USE_BLUETOOTH).
-//#define _SERIAL_LOG   // USB Serial
+//#define _SERIAL_LOG   // USB Serial - zuschalten, um Logs auch auf COM11 mitzulesen
 #define _BT_LOG         // BT-UART (Serial1)
 
 // ── Kanal der CLI-Shell ────────────────────────────────────

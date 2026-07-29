@@ -24,11 +24,11 @@ bool IMU::begin(bool initWire) {
     }
 
     if (!_imu.init()) {
-        LOG("[IMU] ERROR: ICM-20948 nicht gefunden!");
+        LOGGER_NOTICE("[IMU] ERROR: ICM-20948 nicht gefunden!");
         return false;
     }
 
-    LOG("[IMU] Kalibrierung - bitte ruhig halten...");
+    LOGGER_NOTICE("[IMU] Kalibrierung - bitte ruhig halten...");
     _imu.autoOffsets();
 
     _imu.setGyrRange(ICM20948_GYRO_RANGE_250);
@@ -37,14 +37,14 @@ bool IMU::begin(bool initWire) {
     _imu.setAccDLPF(ICM20948_DLPF_6);
 
     _ready = true;
-    LOG("[IMU] ICM-20948 bereit");
+    LOGGER_NOTICE("[IMU] ICM-20948 bereit");
     return true;
 }
 
 void IMU::calibrate() {
-    LOG("[IMU] Rekalibrierung - bitte ruhig halten...");
+    LOGGER_NOTICE("[IMU] Rekalibrierung - bitte ruhig halten...");
     _imu.autoOffsets();
-    LOG("[IMU] Kalibrierung abgeschlossen");
+    LOGGER_NOTICE("[IMU] Kalibrierung abgeschlossen");
 }
 
 bool IMU::update() {

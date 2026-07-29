@@ -44,25 +44,25 @@ void FlightController::requestArm(bool imuReady, Barometer &baro)
     {
         _armPending = true;
         _armPendingMs = millis();
-        LOG("[CTRL] ARM? Nochmal 'a' druecken (3s)");
+        LOGGER_NOTICE("[CTRL] ARM? Nochmal 'a' druecken (3s)");
         return;
     }
 
     if (millis() - _armPendingMs > 3000)
     {
         _armPending = false;
-        LOG("[CTRL] ARM abgebrochen (Timeout)");
+        LOGGER_NOTICE("[CTRL] ARM abgebrochen (Timeout)");
         return;
     }
 
     _armPending = false;
     if (!imuReady)
     {
-        LOG("[CTRL] ARM verweigert - IMU nicht bereit!");
+        LOGGER_NOTICE("[CTRL] ARM verweigert - IMU nicht bereit!");
         return;
     }
 
-    LOG("[CTRL] Rekalibrierung vor ARM...");
+    LOGGER_NOTICE("[CTRL] Rekalibrierung vor ARM...");
     baro.calibrate();
     delay(500);
     _armed = true;
@@ -71,7 +71,7 @@ void FlightController::requestArm(bool imuReady, Barometer &baro)
     _pidHeight.reset();
     _pidRoll.reset();
     _pidPitch.reset();
-    LOG("[CTRL] ARM - Ziel: 20 cm");
+    LOGGER_NOTICE("[CTRL] ARM - Ziel: 20 cm");
 }
 
 void FlightController::disarm()
@@ -82,25 +82,25 @@ void FlightController::disarm()
     _pidHeight.reset();
     _pidRoll.reset();
     _pidPitch.reset();
-    LOG("[CTRL] DISARM - Motoren gestoppt");
+    LOGGER_NOTICE("[CTRL] DISARM - Motoren gestoppt");
 }
 
 void FlightController::recalibrate(Barometer &baro)
 {
     if (_armed)
     {
-        LOG("[CTRL] Rekalibrierung nur im DISARM Modus!");
+        LOGGER_NOTICE("[CTRL] Rekalibrierung nur im DISARM Modus!");
         return;
     }
     baro.calibrate();
     _pidHeight.reset();
-    LOG("[CTRL] Barometer rekalibriert");
+    LOGGER_NOTICE("[CTRL] Barometer rekalibriert");
 }
 
 void FlightController::adjustTargetHeight(float deltaCm)
 {
     _targetHeightCm = constrain(_targetHeightCm + deltaCm, THROTTLE_MIN_CM, MAX_HEIGHT_CM);
-    LOG_FMT("[CTRL] Zielhoehe: %.1f cm", _targetHeightCm);
+    LOGGER_NOTICE_FMT("[CTRL] Zielhoehe: %.1f cm", _targetHeightCm);
 }
 
 void FlightController::updateArmPendingTimeout()
@@ -108,20 +108,20 @@ void FlightController::updateArmPendingTimeout()
     if (_armPending && (millis() - _armPendingMs > 3000))
     {
         _armPending = false;
-        LOG("[CTRL] ARM abgebrochen (Timeout)");
+        LOGGER_NOTICE("[CTRL] ARM abgebrochen (Timeout)");
     }
 }
 
 void FlightController::toggleStatusLog()
 {
     _statusLogEnabled = !_statusLogEnabled;
-    LOG_FMT("[CTRL] Statusausgabe: %s", _statusLogEnabled ? "EIN" : "AUS");
+    LOGGER_NOTICE_FMT("[CTRL] Statusausgabe: %s", _statusLogEnabled ? "EIN" : "AUS");
 }
 
 void FlightController::setTargetHeightCm(float cm)
 {
     _targetHeightCm = constrain(cm, THROTTLE_MIN_CM, MAX_HEIGHT_CM);
-    LOG_FMT("[CTRL] Zielhoehe: %.1f cm", _targetHeightCm);
+    LOGGER_NOTICE_FMT("[CTRL] Zielhoehe: %.1f cm", _targetHeightCm);
 }
 
 void FlightController::checkSafety(bool imuReady, float baroAltitudeCm)
@@ -131,13 +131,13 @@ void FlightController::checkSafety(bool imuReady, float baroAltitudeCm)
 
     if (!imuReady)
     {
-        LOG("[SAFETY] IMU Fehler - DISARM!");
+        LOGGER_NOTICE("[SAFETY] IMU Fehler - DISARM!");
         disarm();
     }
 
     if (abs(baroAltitudeCm - _lastSafetyHeightCm) > 500.0f)
     {
-        LOG("[SAFETY] Hoehensprung - DISARM!");
+        LOGGER_NOTICE("[SAFETY] Hoehensprung - DISARM!");
         disarm();
     }
     _lastSafetyHeightCm = baroAltitudeCm;
@@ -169,7 +169,7 @@ void FlightController::logStatus(const Battery &battery, const Barometer &baro, 
         return;
     _lastPrintMs = millis();
 
-    LOG_FMT("[CTRL] Ziel: %.1f cm | Ist: %.1f cm | Throttle: %.0f us | Armed: %s | Bat: %.2fV | Druck: %.2f hPa",
+    LOGGER_NOTICE_FMT("[CTRL] Ziel: %.1f cm | Ist: %.1f cm | Throttle: %.0f us | Armed: %s | Bat: %.2fV | Druck: %.2f hPa",
             _targetHeightCm,
             ultrasonic.isValid() ? ultrasonic.getAltitudeCm() : baro.getAltitudeCm(),
             _pidHeight.getLastThrottle(),

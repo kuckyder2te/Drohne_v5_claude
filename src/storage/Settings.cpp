@@ -4,7 +4,7 @@
 
 void Settings::begin() {
     EEPROM.begin(EEPROM_SIZE);
-    LOG("[EEPROM] Initialisiert");
+    LOGGER_NOTICE("[EEPROM] Initialisiert");
 }
 
 void Settings::_writeCoeffs(int addr, const PidCoeffs& c) {
@@ -25,31 +25,31 @@ void Settings::save(const PidCoeffs& height, const PidCoeffs& roll, const PidCoe
     _writeCoeffs(EEPROM_ADDR_PITCH,  pitch);
     EEPROM.write(EEPROM_VALID_ADDR, EEPROM_VALID_VAL);
     EEPROM.commit();
-    LOG("[EEPROM] Gespeichert");
-    LOG_FMT("[EEPROM] height Kp=%.4f Ki=%.4f Kd=%.4f", height.kp, height.ki, height.kd);
-    LOG_FMT("[EEPROM] roll   Kp=%.4f Ki=%.4f Kd=%.4f", roll.kp,   roll.ki,   roll.kd);
-    LOG_FMT("[EEPROM] pitch  Kp=%.4f Ki=%.4f Kd=%.4f", pitch.kp,  pitch.ki,  pitch.kd);
+    LOGGER_NOTICE("[EEPROM] Gespeichert");
+    LOGGER_NOTICE_FMT("[EEPROM] height Kp=%.4f Ki=%.4f Kd=%.4f", height.kp, height.ki, height.kd);
+    LOGGER_NOTICE_FMT("[EEPROM] roll   Kp=%.4f Ki=%.4f Kd=%.4f", roll.kp,   roll.ki,   roll.kd);
+    LOGGER_NOTICE_FMT("[EEPROM] pitch  Kp=%.4f Ki=%.4f Kd=%.4f", pitch.kp,  pitch.ki,  pitch.kd);
 }
 
 bool Settings::load(PidCoeffs& height, PidCoeffs& roll, PidCoeffs& pitch) {
     // Pruefen ob gueltige Daten im aktuellen Layout vorhanden sind
     uint8_t marker = EEPROM.read(EEPROM_VALID_ADDR);
     if (marker != EEPROM_VALID_VAL) {
-        LOG("[EEPROM] Keine gueltigen Daten - Standardwerte");
+        LOGGER_NOTICE("[EEPROM] Keine gueltigen Daten - Standardwerte");
         return false;
     }
     _readCoeffs(EEPROM_ADDR_HEIGHT, height);
     _readCoeffs(EEPROM_ADDR_ROLL,   roll);
     _readCoeffs(EEPROM_ADDR_PITCH,  pitch);
-    LOG("[EEPROM] Geladen");
-    LOG_FMT("[EEPROM] height Kp=%.4f Ki=%.4f Kd=%.4f", height.kp, height.ki, height.kd);
-    LOG_FMT("[EEPROM] roll   Kp=%.4f Ki=%.4f Kd=%.4f", roll.kp,   roll.ki,   roll.kd);
-    LOG_FMT("[EEPROM] pitch  Kp=%.4f Ki=%.4f Kd=%.4f", pitch.kp,  pitch.ki,  pitch.kd);
+    LOGGER_NOTICE("[EEPROM] Geladen");
+    LOGGER_NOTICE_FMT("[EEPROM] height Kp=%.4f Ki=%.4f Kd=%.4f", height.kp, height.ki, height.kd);
+    LOGGER_NOTICE_FMT("[EEPROM] roll   Kp=%.4f Ki=%.4f Kd=%.4f", roll.kp,   roll.ki,   roll.kd);
+    LOGGER_NOTICE_FMT("[EEPROM] pitch  Kp=%.4f Ki=%.4f Kd=%.4f", pitch.kp,  pitch.ki,  pitch.kd);
     return true;
 }
 
 void Settings::reset() {
     EEPROM.write(EEPROM_VALID_ADDR, 0x00);
     EEPROM.commit();
-    LOG("[EEPROM] Zurueckgesetzt");
+    LOGGER_NOTICE("[EEPROM] Zurueckgesetzt");
 }
