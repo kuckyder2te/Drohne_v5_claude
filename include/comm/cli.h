@@ -2,9 +2,11 @@
 
 #include <Arduino.h>
 
-// Duennes Wrapper-Modul um philj404/SimpleSerialShell. Koexistiert vorerst
-// mit comm/CommChannel.h (ersetzt es noch nicht) - erster Schritt der
-// schrittweisen Umstellung der Bedienung auf eine reine CLI.
+// Duennes Wrapper-Modul um philj404/SimpleSerialShell. Bietet inzwischen alle
+// Befehle von comm/CommChannel.h an, koexistiert aber weiterhin mit ihm
+// (ersetzt es noch nicht) - schrittweise Umstellung der Bedienung auf eine
+// reine CLI. Benennung: Aktionen als Verben (arm, stop, recalibrate, save,
+// reset, statusLog), Werte als setX/getX (setHeight, setKpRoll, getPid, ...).
 namespace cli {
     // Registriert alle CLI-Befehle und bindet die Shell an `stream`.
     // `stream` ist derselbe Stream, an den auch der aktive CommChannel
@@ -14,12 +16,16 @@ namespace cli {
     void begin(Stream &stream);
 
     // Einmal pro loop()-Durchlauf aufrufen, VOR comm->getKey().
-    // Rueckgabe true: dieser Durchlauf gehoert der CLI (Zeile beginnt mit
-    // ':' oder eine solche Zeile wird gerade eingelesen) - der Aufrufer
-    // muss comm->getKey()/getCommand()/processCommand() fuer diesen
-    // Durchlauf auslassen, da sonst beide Parser um dieselben Bytes
-    // konkurrieren wuerden.
-    // Rueckgabe false: nichts CLI-relevantes anstehend, der bestehende
-    // CommChannel-Pfad darf normal weiterlaufen.
+    // Rueckgabe true, wenn in diesem Durchlauf Bytes verarbeitet wurden
+    // (Not-Aus-Taste, fertige Kommandozeile oder Teilzeile im Puffer).
+    //
+    // Solange COMM_USE_BLUETOOTH gesetzt ist, liegt die CLI auf USB und comm
+    // auf BT - beide Parser konkurrieren dann nicht um dieselben Bytes, der
+    // Rueckgabewert muss vom Aufrufer also nicht ausgewertet werden.
+    //
+    // Fischt 'd' (Not-Aus), '+' und '-' vor der Shell aus dem Stream, damit
+    // sie ohne Enter wirken - aber nur am Zeilenanfang, sonst verschwaende
+    // das '-' in "setHeight -10". Deshalb darf auch kein Kommandoname mit
+    // 'd' beginnen (siehe cli.cpp).
     bool update();
 }

@@ -42,7 +42,7 @@ The firmware implements a **cascaded PID altitude + attitude stabilizer** for a 
 1. **Sensor update** every loop iteration — barometer, ultrasonic, IMU all polled unconditionally in `NormalMode::loop()`.
 2. **Safety checks** — `FlightController::checkSafety()` disarms (`FlightController::disarm()`) on IMU-not-ready or an altitude jump > 500 cm between consecutive loop iterations (based on barometer altitude).
 3. **Input processing** — a single active channel, `comm` (defined in `NormalMode.cpp`), drives all key/command handling via [src/control/InputHandler.cpp](src/control/InputHandler.cpp). `comm` is a `CommChannel*` created in `NormalMode::setup()` wrapping either `Serial1`/BT UART or `Serial`/USB, chosen by the `COMM_USE_BLUETOOTH` switch in `config.h` (currently defined, so `comm` is on BT and `LOG`/`LOG_FMT` — which route through `comm` — only appear on the BT UART, not on `pio device monitor`/COM11). PID-tuning strings go through `CommChannel::processCommand()`, called against the `PIDController` instances owned by `FlightController` (`getPidHeight()`/`getPidRoll()`/`getPidPitch()`).
-4. **CLI (new, coexisting)** — [src/comm/cli.cpp](src/comm/cli.cpp) wraps the `philj404/SimpleSerialShell` library and is *always* attached to `Serial`/USB (`cli::begin(Serial)` in `NormalMode::setup()`), independent of the `COMM_USE_BLUETOOTH` switch. `NormalMode::loop()` calls `cli::update()` (which calls `shell.executeIfInput()`) before touching `comm`. It currently exposes `setHeight <cm>`/`getHeight` (against `FlightController::setTargetHeightCm()`/`getTargetHeightCm()`, clamped to `[THROTTLE_MIN_CM, MAX_HEIGHT_CM]` in `config.h`) plus the shell's built-in `help`. This is the first step of a planned gradual migration off `CommChannel`; it does not yet replace it. The shell terminates commands on `\r`, not `\n`. See the `serial-cli-test` skill for a scripted USB/COM11 test of this path.
+4. **CLI (coexists with `comm`)** — [src/comm/cli.cpp](src/comm/cli.cpp) wraps the `philj404/SimpleSerialShell` library and is *always* attached to `Serial`/USB (`cli::begin(Serial)` in `NormalMode::setup()`), independent of the `COMM_USE_BLUETOOTH` switch. `NormalMode::loop()` calls `cli::update()` before touching `comm`. It now offers the full `CommChannel` command set (see the CLI table below) but does **not** replace it — the migration is deliberately gradual, so both paths stay live. See the `serial-cli-test` skill for a scripted USB/COM11 test of this path.
 5. **Arm sequence** — `FlightController::requestArm()`: pressing `a` twice within 3 s recalibrates the barometer, resets all three PID controllers, arms, and sets `targetHeightCm = 20`. `d` calls `FlightController::disarm()` immediately (motors to `ESC_MIN_US`).
 6. **Height PID** (every `PID_INTERVAL_MS` = 50 ms, in `FlightController::updateControlLoop()`) — error = `targetHeightCm − currentAltitude`; altitude source is ultrasonic when valid, barometer otherwise. Output includes the `THROTTLE_OFFSET_US` baseline.
 7. **Anti-windup / liftoff gating** — the integral term on all three PID controllers only accumulates once `ultrasonic.isValid() && altitude > LIFTOFF_HEIGHT_CM` (`enableIntegral()`); it's cleared again on landing. This prevents integral windup while sitting on the ground pre-liftoff.
@@ -64,13 +64,35 @@ The firmware implements a **cascaded PID altitude + attitude stabilizer** for a 
 | [lib/Ultrasonic/Ultrasonic.cpp](lib/Ultrasonic/Ultrasonic.cpp) | HC-SR04 on pins 8/6; valid range ~2–300 cm; preferred altitude source over barometer whenever `isValid()` |
 | [lib/Battery/Battery.cpp](lib/Battery/Battery.cpp) | ADC pin 26, voltage divider; warns/critical via buzzer pin 10 |
 | [src/comm/CommChannel.cpp](src/comm/CommChannel.cpp) | Transport-agnostic key/command parser and PID-tuning command processor. Constructor takes any `Stream&` (used for BT UART `Serial1` and USB `Serial` today; a TCP `Client` would work too, since it also derives from `Stream`). ANSI escape sequences are always discarded; `+`/`-` act immediately; other single-char commands (`A D H R L S ?`) resolve after a 200 ms timeout or on newline (whichever comes first); multi-char strings (`RP=`/`RI=`/`RD=`, `PP=`/`PI=`/`PD=`, height `P=`/`I=`/`D=`, `SAVE`, `RESET`) terminate on newline only. |
-| [src/comm/cli.cpp](src/comm/cli.cpp) | `SimpleSerialShell`-based CLI, always bound to USB `Serial` regardless of `COMM_USE_BLUETOOTH`; coexists with (does not yet replace) `CommChannel`. New commands follow the `setX`/`getX` pattern already used by `cmdSetHeight`/`cmdGetHeight`. |
+| [src/comm/cli.cpp](src/comm/cli.cpp) | `SimpleSerialShell`-based CLI, always bound to USB `Serial` regardless of `COMM_USE_BLUETOOTH`; coexists with (does not yet replace) `CommChannel`. Naming: verbs for actions (`arm`, `stop`, `recalibrate`, `save`, `reset`, `statusLog`), `setX`/`getX` for values (`setHeight`, `setKpRoll`, `getPid`, …). See the CLI section below for the `d` naming constraint. |
 | [src/storage/Settings.cpp](src/storage/Settings.cpp) | EEPROM persistence for height PID Kp/Ki/Kd, validity marker byte |
 | [src/control/FlightController.cpp](src/control/FlightController.cpp) | Owns flight state (`armed`, `targetHeightCm`, status-log/arm-pending timers), the three `PIDController` instances, and `MotorMixer`; provides `requestArm()`/`disarm()`/`recalibrate()`/`adjustTargetHeight()`/`toggleStatusLog()`, the safety check (`checkSafety()`), the PID+mixing loop (`updateControlLoop()`) and the status log (`logStatus()`) — the flight-control logic that used to live directly in `main.cpp::loop()` |
 | [src/control/InputHandler.cpp](src/control/InputHandler.cpp) | Key/command handling (ARM timeout, `switch(key)`), called from `NormalMode::loop()`; translates key events into calls on `FlightController` |
 | [src/mode/NormalMode.cpp](src/mode/NormalMode.cpp) | Firmware composition root / sole entry point: defines the shared globals, does comm/CLI + sensor init in `setup()`, runs the control loop in `loop()` (sensor updates, `FlightController::checkSafety()`, `InputHandler::handle()`, `FlightController::updateControlLoop()`/`logStatus()`). `main.cpp` just forwards to it |
 
 `MotorMixer`, `IMU`, `Barometer`, `Ultrasonic`, `Battery` live in `lib/<Name>/` (PlatformIO private libraries) rather than `src/`/`include/`, specifically so the standalone tools under `src/tools/` can link each one individually without pulling in `main.cpp` or unrelated modules — PlatformIO auto-links `lib/` into every environment regardless of the `build_src_filter` in effect. `PIDController`, `FlightController`, `CommChannel`, `Settings`, `InputHandler`, `NormalMode` stay directly under `src/`/`include/` since only the main firmware needs them, and the firmware env (`[env:rpipico]`) excludes `src/tools/` via `build_src_filter = +<*> -<tools/>`. `main.cpp` is a two-line shim (`NormalMode::setup()`/`loop()`); the shared globals and all wiring live in `NormalMode.cpp`.
+
+### CLI (`src/comm/cli.cpp`)
+
+The shell exposes every `CommChannel` command, plus the library's built-in `help`:
+
+| CLI | replaces (`CommChannel`) |
+|---|---|
+| `arm` | `a` — still requires two calls within 3 s |
+| `stop` | `d` |
+| `recalibrate` / `statusLog` | `r` / `l` |
+| `save` / `reset` | `S`/`SAVE` / `RESET` |
+| `getPid` / `getArmed` | `?` / — |
+| `setHeight <cm>` / `getHeight` | `+`/`-` (absolute instead of relative) |
+| `setKpHeight` `setKiHeight` `setKdHeight` | `P=` `I=` `D=` |
+| `setKpRoll` … / `setKpPitch` … | `RP=` `RI=` `RD=` / `PP=` `PI=` `PD=` |
+
+Four things about this module are load-bearing and easy to break:
+
+- **No command name may start with `d`.** `cli::update()` pulls `d` out of the stream as a byte-instant emergency disarm *before* the shell sees it, so a command named `disarm` would fire on its first byte and leave `isarm` in the buffer — the same collision CLAUDE.md documents for `d` vs. `D=<value>`. Hence `stop`.
+- **`d`/`+`/`-` are only intercepted at the start of a line**, tracked via the `atLineStart` flag. Mid-line they belong to an argument — otherwise `setHeight -10` would lose its minus sign. A 5 s idle timeout calls `shell.resetBuffer()` so an abandoned partial line can't leave the emergency stop disarmed.
+- **Command feedback must go through `shell.print*()`, not `LOG()`.** `dlog()` writes to `comm`, which sits on BT while `COMM_USE_BLUETOOTH` is defined — `LOG()` output never reaches the CLI's USB stream. (`_SERIAL_LOG`/`_BT_LOG` in `config.h` are currently inert for the same reason: `dlog()` always targets `comm` regardless.)
+- The shell is a **singleton with a single `attach()` stream** (USB *or* BT, never both), matches command names **case-insensitively** (`strncasecmp`), and terminates a line on `\r` **or `;`** — the latter exists specifically for BT/BLE apps that can't send Enter, which is what would make a future move of the CLI onto `Serial1` viable.
 
 ### Test Modes
 

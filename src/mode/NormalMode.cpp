@@ -44,7 +44,7 @@ void NormalMode::setup()
     comm->sendLine("[BT] Befehle: A D R L H  +/-");
     comm->sendLine("[BT] PID: P=x I=x D=x  RP= RI= RD=  PP= PI= PD=");
     comm->sendLine("[BT] S=Speichern  RESET  ?=Abfrage");
-    comm->sendLine("[CLI] Neu: ':' + Zeile fuer Shell-Befehle, z.B. :setHeight 30  (:help fuer Liste)");
+    comm->sendLine("[CLI] USB-Shell: 'help' listet alle Befehle, z.B. setHeight 30");
     LOG("[BT] Bluetooth bereit");
 
     LOG("=== DROHNE PICO BOOT ====");
