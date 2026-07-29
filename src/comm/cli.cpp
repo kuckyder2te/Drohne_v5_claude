@@ -64,6 +64,15 @@ namespace {
         return strcasecmp(arg, name) == 0;
     }
 
+    // Standardwerte je Achse aus config.h - Ziel von "pid -reset".
+    PidCoeffs axisDefaults(int ax) {
+        switch (ax) {
+            case AX_HEIGHT: return {PID_KP_HEIGHT, PID_KI_HEIGHT, PID_KD_HEIGHT};
+            case AX_ROLL:   return {PID_KP_ROLL,   PID_KI_ROLL,   PID_KD_ROLL};
+            default:        return {PID_KP_PITCH,  PID_KI_PITCH,  PID_KD_PITCH};
+        }
+    }
+
     // Ein Achsen-Objekt als JSON-Fragment, ohne umschliessende Klammern.
     void printAxisJson(int ax) {
         PIDController &p = axisPid(ax);
@@ -73,6 +82,19 @@ namespace {
         shell.print(F(",\"Ki\":"));     shell.print(p.getKi(), 4);
         shell.print(F(",\"Kd\":"));     shell.print(p.getKd(), 4);
         shell.print('}');
+    }
+
+    // Gibt die markierten Achsen als JSON-Objekt aus; mask == nullptr -> alle.
+    void printPidJson(const bool *mask) {
+        shell.print('{');
+        bool first = true;
+        for (int ax = 0; ax < AX_COUNT; ++ax) {
+            if (mask && !mask[ax]) continue;
+            if (!first) shell.print(',');
+            printAxisJson(ax);
+            first = false;
+        }
+        shell.println('}');
     }
 
     void printTargetHeight() {
@@ -119,23 +141,6 @@ namespace {
         return 0;
     }
 
-    int cmdSave(int /*argc*/, char ** /*argv*/) {
-        PIDController &h = flightController.getPidHeight();
-        settings.save(h.getKp(), h.getKi(), h.getKd());
-        shell.println(F("[CLI] Hoehen-PID gespeichert"));
-        return 0;
-    }
-
-    int cmdReset(int /*argc*/, char ** /*argv*/) {
-        settings.reset();
-        PIDController &h = flightController.getPidHeight();
-        h.setKp(PID_KP_HEIGHT);
-        h.setKi(PID_KI_HEIGHT);
-        h.setKd(PID_KD_HEIGHT);
-        shell.println(F("[CLI] Hoehen-PID auf Standard zurueckgesetzt"));
-        return 0;
-    }
-
     // ── Werte (setX/getX) ──────────────────────────────────────
 
     int cmdSetHeight(int argc, char **argv) {
@@ -160,34 +165,67 @@ namespace {
     }
 
     void pidHelp() {
-        shell.println(F("pid - PID-Koeffizienten anzeigen und setzen"));
-        shell.println(F("usage: pid [-height|-roll|-pitch] [-Kp <w>] [-Ki <w>] [-Kd <w>]"));
+        shell.println(F("pid - PID-Koeffizienten anzeigen, setzen, sichern"));
+        shell.println(F("usage: pid [-reset] [-height|-roll|-pitch] [-Kp|-Ki|-Kd <w>] [-save]"));
         shell.println(F("  pid                       alle Regler als JSON"));
         shell.println(F("  pid -height               nur den Hoehenregler als JSON"));
         shell.println(F("  pid -height -Kd 10        Kd des Hoehenreglers setzen"));
         shell.println(F("  pid -roll -Kp 1,2 -Ki 0.1 mehrere Koeffizienten auf einmal"));
         shell.println(F("  pid -height -Kp 2 -roll -Kp 1   mehrere Achsen je Aufruf"));
+        shell.println(F("  pid -save                 alle drei Regler ins EEPROM"));
+        shell.println(F("  pid -reset                alle drei auf Standardwerte"));
+        shell.println(F("  pid -height -Kp 2 -save   aendern und sichern in einem Zug"));
         shell.println(F("Die Achse gilt fuer alle folgenden -K-Optionen und muss vor"));
         shell.println(F("ihnen stehen. Optionen sind case-insensitiv, Komma als"));
         shell.println(F("Dezimaltrenner ist erlaubt. Ausgegeben werden die genannten"));
         shell.println(F("Achsen - ohne Achsenangabe alle."));
+        shell.println(F("-save/-reset gelten IMMER fuer alle drei Regler (das EEPROM"));
+        shell.println(F("hat nur einen Gueltigkeitsmarker) und werden unabhaengig von"));
+        shell.println(F("ihrer Position ausgefuehrt: erst -reset, dann die -K-Werte,"));
+        shell.println(F("zuletzt -save."));
     }
 
-    // Loest die frueheren neun setK*-Kommandos und getPid ab. Die Achse ist
-    // zustandsbehaftet: sie gilt fuer alle nachfolgenden -K-Optionen, daher
-    // laesst sich in einem Aufruf auch mehr als ein Regler stellen.
+    // Loest die frueheren neun setK*-Kommandos sowie getPid, save und reset
+    // ab. Die Achse ist zustandsbehaftet: sie gilt fuer alle nachfolgenden
+    // -K-Optionen, daher laesst sich in einem Aufruf mehr als ein Regler
+    // stellen.
     int cmdPid(int argc, char **argv) {
         if (argc >= 2 && optIs(argv[1], "-h")) {
             pidHelp();
             return 0;
         }
 
+        // Durchgang 1: -reset/-save nur einsammeln. Beide wirken auf alle
+        // Achsen und werden in fester Reihenfolge ausgefuehrt (reset -> Werte
+        // -> save), damit "pid -save -height -Kp 2" nicht den Stand VOR der
+        // Aenderung sichert - die Position im Aufruf soll egal sein.
+        bool doReset = false;
+        bool doSave  = false;
+        for (int i = 1; i < argc; ++i) {
+            if      (optIs(argv[i], "-reset")) doReset = true;
+            else if (optIs(argv[i], "-save"))  doSave  = true;
+        }
+
+        if (doReset) {
+            settings.reset();
+            for (int ax = 0; ax < AX_COUNT; ++ax) {
+                PidCoeffs d = axisDefaults(ax);
+                PIDController &p = axisPid(ax);
+                p.setKp(d.kp);
+                p.setKi(d.ki);
+                p.setKd(d.kd);
+            }
+        }
+
+        // Durchgang 2: Achsenwahl und Koeffizienten
         bool selected[AX_COUNT] = {false, false, false};
         bool anySelected = false;
         int  current     = -1;   // aktuelle Achse, -1 = noch keine gewaehlt
 
         for (int i = 1; i < argc; ++i) {
             const char *a = argv[i];
+
+            if (optIs(a, "-reset") || optIs(a, "-save")) continue;  // s.o.
 
             int ax = -1;
             if      (optIs(a, "-height")) ax = AX_HEIGHT;
@@ -230,15 +268,18 @@ namespace {
             return -1;
         }
 
-        shell.print('{');
-        bool first = true;
-        for (int ax = 0; ax < AX_COUNT; ++ax) {
-            if (anySelected && !selected[ax]) continue;
-            if (!first) shell.print(',');
-            printAxisJson(ax);
-            first = false;
+        if (doSave) {
+            PidCoeffs c[AX_COUNT];
+            for (int ax = 0; ax < AX_COUNT; ++ax) {
+                PIDController &p = axisPid(ax);
+                c[ax] = {p.getKp(), p.getKi(), p.getKd()};
+            }
+            settings.save(c[AX_HEIGHT], c[AX_ROLL], c[AX_PITCH]);
         }
-        shell.println('}');
+
+        // Nach -save/-reset immer alle Achsen zeigen: beide betreffen alle
+        // drei, eine auf eine Achse eingeschraenkte Ausgabe waere irrefuehrend.
+        printPidJson((anySelected && !doSave && !doReset) ? selected : nullptr);
         return 0;
     }
 }
@@ -258,8 +299,6 @@ namespace cli {
         shell.addCommand(F("stop - DISARM, Motoren sofort stoppen"), cmdStop);
         shell.addCommand(F("recalibrate - Barometer rekalibrieren (nur disarmt)"), cmdRecalibrate);
         shell.addCommand(F("statusLog - Statusausgabe ein/aus"), cmdStatusLog);
-        shell.addCommand(F("save - Hoehen-PID im EEPROM speichern"), cmdSave);
-        shell.addCommand(F("reset - Hoehen-PID auf Standardwerte"), cmdReset);
 
         shell.addCommand(F("setHeight cm - Zielhoehe setzen"), cmdSetHeight);
         shell.addCommand(F("getHeight - Zielhoehe ausgeben"), cmdGetHeight);

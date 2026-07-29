@@ -37,10 +37,8 @@
 #define THROTTLE_STEP 50
 
 // ── EEPROM-Adressen ────────────────────────────────────────
-#define EEPROM_ADDR_KP 0
-#define EEPROM_ADDR_KI 4
-#define EEPROM_ADDR_KD 8
-#define EEPROM_SIZE 16
+// Stehen jetzt ausschliesslich in include/storage/Settings.h - hier lagen
+// sie frueher zusaetzlich, was beim Aendern still auseinanderlaufen konnte.
 
 // ── PID Roll/Pitch ─────────────────────────────────────────
 #define PID_KP_ROLL 0.5f // klein anfangen!

@@ -7,42 +7,44 @@ void Settings::begin() {
     LOG("[EEPROM] Initialisiert");
 }
 
-void Settings::_writeFloat(int addr, float val) {
-    EEPROM.put(addr, val);
+void Settings::_writeCoeffs(int addr, const PidCoeffs& c) {
+    EEPROM.put(addr + 0, c.kp);
+    EEPROM.put(addr + 4, c.ki);
+    EEPROM.put(addr + 8, c.kd);
 }
 
-float Settings::_readFloat(int addr) {
-    float val = 0.0f;
-    EEPROM.get(addr, val);
-    return val;
+void Settings::_readCoeffs(int addr, PidCoeffs& c) {
+    EEPROM.get(addr + 0, c.kp);
+    EEPROM.get(addr + 4, c.ki);
+    EEPROM.get(addr + 8, c.kd);
 }
 
-void Settings::save(float kp, float ki, float kd) {
-    _writeFloat(EEPROM_ADDR_KP, kp);
-    _writeFloat(EEPROM_ADDR_KI, ki);
-    _writeFloat(EEPROM_ADDR_KD, kd);
+void Settings::save(const PidCoeffs& height, const PidCoeffs& roll, const PidCoeffs& pitch) {
+    _writeCoeffs(EEPROM_ADDR_HEIGHT, height);
+    _writeCoeffs(EEPROM_ADDR_ROLL,   roll);
+    _writeCoeffs(EEPROM_ADDR_PITCH,  pitch);
     EEPROM.write(EEPROM_VALID_ADDR, EEPROM_VALID_VAL);
     EEPROM.commit();
     LOG("[EEPROM] Gespeichert");
-    LOG_FMT("[EEPROM] Kp=%.4f",kp); 
-    LOG_FMT("[EEPROM] Ki=%.4f",ki);  
-    LOG_FMT("[EEPROM] Kd=%.4f",kd);  
+    LOG_FMT("[EEPROM] height Kp=%.4f Ki=%.4f Kd=%.4f", height.kp, height.ki, height.kd);
+    LOG_FMT("[EEPROM] roll   Kp=%.4f Ki=%.4f Kd=%.4f", roll.kp,   roll.ki,   roll.kd);
+    LOG_FMT("[EEPROM] pitch  Kp=%.4f Ki=%.4f Kd=%.4f", pitch.kp,  pitch.ki,  pitch.kd);
 }
 
-bool Settings::load(float& kp, float& ki, float& kd) {
-    // Pruefen ob gueltige Daten vorhanden
+bool Settings::load(PidCoeffs& height, PidCoeffs& roll, PidCoeffs& pitch) {
+    // Pruefen ob gueltige Daten im aktuellen Layout vorhanden sind
     uint8_t marker = EEPROM.read(EEPROM_VALID_ADDR);
     if (marker != EEPROM_VALID_VAL) {
         LOG("[EEPROM] Keine gueltigen Daten - Standardwerte");
         return false;
     }
-    kp = _readFloat(EEPROM_ADDR_KP);
-    ki = _readFloat(EEPROM_ADDR_KI);
-    kd = _readFloat(EEPROM_ADDR_KD);
+    _readCoeffs(EEPROM_ADDR_HEIGHT, height);
+    _readCoeffs(EEPROM_ADDR_ROLL,   roll);
+    _readCoeffs(EEPROM_ADDR_PITCH,  pitch);
     LOG("[EEPROM] Geladen");
-    LOG_FMT("[EEPROM] Kp= %.4f",kp); 
-    LOG_FMT("[EEPROM] Ki= %.4f",ki); 
-    LOG_FMT("[EEPROM] Kd= %.4f",kd); 
+    LOG_FMT("[EEPROM] height Kp=%.4f Ki=%.4f Kd=%.4f", height.kp, height.ki, height.kd);
+    LOG_FMT("[EEPROM] roll   Kp=%.4f Ki=%.4f Kd=%.4f", roll.kp,   roll.ki,   roll.kd);
+    LOG_FMT("[EEPROM] pitch  Kp=%.4f Ki=%.4f Kd=%.4f", pitch.kp,  pitch.ki,  pitch.kd);
     return true;
 }
 

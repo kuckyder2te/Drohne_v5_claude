@@ -8,6 +8,16 @@
 #include "Battery.h"
 #include "storage/Settings.h"
 
+namespace
+{
+    void applyCoeffs(PIDController &pid, const PidCoeffs &c)
+    {
+        pid.setKp(c.kp);
+        pid.setKi(c.ki);
+        pid.setKd(c.kd);
+    }
+}
+
 void FlightController::begin(Settings &settings)
 {
     _motors.begin();
@@ -16,12 +26,12 @@ void FlightController::begin(Settings &settings)
     _pidPitch.begin();
 
     settings.begin();
-    float kp, ki, kd;
-    if (settings.load(kp, ki, kd))
+    PidCoeffs height, roll, pitch;
+    if (settings.load(height, roll, pitch))
     {
-        _pidHeight.setKp(kp);
-        _pidHeight.setKi(ki);
-        _pidHeight.setKd(kd);
+        applyCoeffs(_pidHeight, height);
+        applyCoeffs(_pidRoll,   roll);
+        applyCoeffs(_pidPitch,  pitch);
     }
 }
 

@@ -66,7 +66,7 @@ The firmware implements a **cascaded PID altitude + attitude stabilizer** for a 
 | [lib/Ultrasonic/Ultrasonic.cpp](lib/Ultrasonic/Ultrasonic.cpp) | HC-SR04 on pins 8/6; valid range ~2–300 cm; preferred altitude source over barometer whenever `isValid()` |
 | [lib/Battery/Battery.cpp](lib/Battery/Battery.cpp) | ADC pin 26, voltage divider; warns/critical via buzzer pin 10 |
 | [src/comm/cli.cpp](src/comm/cli.cpp) | The firmware's sole input path — a `SimpleSerialShell`-based CLI bound to `Serial1` or `Serial` per `CLI_USE_BLUETOOTH`. Naming: verbs for actions (`arm`, `stop`, `recalibrate`, `save`, `reset`, `statusLog`), `setX`/`getX` for values (`setHeight`, `getHeight`, `getArmed`), and one option-parsing command (`pid`). See the CLI section below for the `d` naming constraint. |
-| [src/storage/Settings.cpp](src/storage/Settings.cpp) | EEPROM persistence for height PID Kp/Ki/Kd, validity marker byte |
+| [src/storage/Settings.cpp](src/storage/Settings.cpp) | EEPROM persistence for all three PID controllers (`PidCoeffs` × height/roll/pitch, 12 B each) plus one validity-marker byte. The marker doubles as a layout version — bumped to `0xAC` when roll/pitch were added, so a pre-existing EEPROM falls back to defaults instead of being misread. Addresses live only in `Settings.h` (they used to be duplicated in `config.h`) |
 | [src/control/FlightController.cpp](src/control/FlightController.cpp) | Owns flight state (`armed`, `targetHeightCm`, status-log/arm-pending timers), the three `PIDController` instances, and `MotorMixer`; provides `requestArm()`/`disarm()`/`recalibrate()`/`adjustTargetHeight()`/`toggleStatusLog()`, the safety check (`checkSafety()`), the PID+mixing loop (`updateControlLoop()`) and the status log (`logStatus()`) — the flight-control logic that used to live directly in `main.cpp::loop()` |
 | [src/mode/NormalMode.cpp](src/mode/NormalMode.cpp) | Firmware composition root / sole entry point: defines the shared globals, does CLI + sensor init in `setup()`, runs the control loop in `loop()` (`cli::update()`, sensor updates, `FlightController::checkSafety()`/`updateArmPendingTimeout()`/`updateControlLoop()`/`logStatus()`). `main.cpp` just forwards to it |
 
@@ -80,13 +80,12 @@ The CLI is the firmware's only input path. It replaced `CommChannel`/`InputHandl
 |---|---|
 | `arm` / `stop` | `arm` twice within 3 s to arm; `stop` disarms |
 | `recalibrate` / `statusLog` | recalibrate only while disarmed |
-| `save` / `reset` | height PID to/from EEPROM |
-| `pid [axis] [-Kp/-Ki/-Kd v]` | read/write all PID coefficients — see below |
+| `pid [axis] [-Kp/-Ki/-Kd v] [-save] [-reset]` | read/write/persist all PID coefficients — see below |
 | `setHeight <cm>` / `getHeight` | clamped to `[THROTTLE_MIN_CM, MAX_HEIGHT_CM]` |
 | `getArmed` | flight state |
 | `help` | built into the library; lists everything |
 
-**`pid`** replaced nine `setK*Height`/`Roll`/`Pitch` setters plus `getPid` with one command. `pid -h` prints its own option help.
+**`pid`** replaced nine `setK*Height`/`Roll`/`Pitch` setters plus `getPid`, `save` and `reset` with one command. `pid -h` prints its own option help.
 
 ```
 pid                              → {"height":{...},"roll":{...},"pitch":{...}}
@@ -94,9 +93,16 @@ pid -height                      → {"height":{"Kp":2.0000,"Ki":0.0000,"Kd":0.0
 pid -height -Kd 10               set one coefficient
 pid -height -Kd 10.1 -Ki 1 -Kp 0.1   several at once
 pid -height -Kp 2 -roll -Kp 1    several axes in one call
+pid -save                        all three controllers → EEPROM
+pid -reset                       all three → config.h defaults, clear EEPROM
+pid -height -Kp 2 -save          tune and persist in one line
 ```
 
-The axis is *stateful*: it applies to every following `-K…` option, which is what allows more than one controller per call. There is deliberately **no default axis** — a `-Kp` before any axis flag is an error rather than silently landing in the height controller. Options compare case-insensitively and accept a German decimal comma. Output is always the axes that were named (all three when none were), printed *after* the writes, so the JSON reflects the value `PIDController::setKp()` actually stored — including its clamp to `[PID_COEFF_MIN, PID_COEFF_MAX]` = `[0, 255]`. Note `SimpleSerialShell` caps a line at 10 tokens, so at most three `-K…` pairs plus two axis flags fit in one call.
+The axis is *stateful*: it applies to every following `-K…` option, which is what allows more than one controller per call. There is deliberately **no default axis** — a `-Kp` before any axis flag is an error rather than silently landing in the height controller. Options compare case-insensitively and accept a German decimal comma.
+
+`-save`/`-reset` always cover **all three** controllers (the EEPROM block has a single validity marker, so a partial save isn't representable) and run in a fixed order regardless of where they appear in the line: **reset → coefficient writes → save**. That two-pass design is what makes `pid -save -height -Kp 2` persist the *new* value rather than the pre-change one. Because they are global, they also force the JSON output to show all three axes — a reply narrowed to one axis would misrepresent what was written.
+
+Output is printed *after* the writes, so the JSON reflects what `PIDController::setKp()` actually stored — including its clamp to `[PID_COEFF_MIN, PID_COEFF_MAX]` = `[0, 255]`. Note `SimpleSerialShell` caps a line at 10 tokens, so at most three `-K…` pairs plus two axis flags fit in one call.
 
 Four things about this module are load-bearing and easy to break:
 

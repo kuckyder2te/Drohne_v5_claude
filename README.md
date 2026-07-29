@@ -381,12 +381,24 @@ PID-Werte werden im Flash gespeichert und beim Start automatisch geladen.
 
 ### EEPROM-Layout
 
+Alle drei Regler werden gemeinsam gesichert (`pid -save`) — es gibt nur
+einen Gültigkeitsmarker für den ganzen Block, ein Teil-Speichern ist daher
+nicht darstellbar. Adressen stehen ausschließlich in
+`include/storage/Settings.h`.
+
 | Adresse | Inhalt | Größe |
 |---|---|---|
-| 0x00 | Kp | 4 Byte (float) |
-| 0x04 | Ki | 4 Byte (float) |
-| 0x08 | Kd | 4 Byte (float) |
-| 0x0C | Validierungs-Marker (0xAB) | 1 Byte |
+| 0x00 | Höhe: Kp, Ki, Kd | 12 Byte (3× float) |
+| 0x0C | Roll: Kp, Ki, Kd | 12 Byte (3× float) |
+| 0x18 | Pitch: Kp, Ki, Kd | 12 Byte (3× float) |
+| 0x24 | Validierungs-Marker (0xAC) | 1 Byte |
+
+> Der Marker ist zugleich die Layout-Version. Er wurde von `0xAB` auf `0xAC`
+> erhöht, als Roll und Pitch dazukamen — ein EEPROM aus der Zeit davor fällt
+> dadurch sauber auf die Standardwerte zurück, statt Bytes des alten Layouts
+> als Roll-/Pitch-Koeffizienten zu interpretieren. **Nach dem ersten Flashen
+> dieser Version sind zuvor gespeicherte PID-Werte also weg** und müssen
+> einmalig neu gesetzt und mit `pid -save` gesichert werden.
 
 ---
 
