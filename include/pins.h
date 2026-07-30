@@ -1,10 +1,10 @@
 #pragma once
 
 // ── Motoren (PWM) ──────────────────────────────────────────
-#define PIN_MOTOR_FL 11 // Front Left  yellow
-#define PIN_MOTOR_FR 12 // Front Right  green
-#define PIN_MOTOR_BR 13 // Back Right blue
-#define PIN_MOTOR_BL 14 // Back Left white
+#define PIN_MOTOR_FL 12 // Front Left  yellow
+#define PIN_MOTOR_FR 13 // Front Right  green
+#define PIN_MOTOR_BR 14 // Back Right blue
+#define PIN_MOTOR_BL 15 // Back Left white
 
 // I²C Pins
 #define PIN_SDA 4
