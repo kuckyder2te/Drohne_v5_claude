@@ -18,9 +18,16 @@
 // PlatformIO-Umgebungen unter src/tools/ (siehe src/tools/README, z.B.
 // "pio run -e test_imu --target upload").
 
-// Temperaturkompensation: Druckkorrektur pro °C Temperaturdifferenz
-// Empirisch ermittelt für MS5607 Sensor
-#define BARO_TEMP_COEFF 0.5f
+// Zusaetzliche manuelle Temperaturkompensation der Druckmessung - deaktiviert.
+// Die MS5611/5607-Formel kompensiert Temperatur bereits selbst ueber die
+// C5/C6-PROM-Koeffizienten (siehe TEMP-Berechnung in Barometer::update()).
+// Ein von 0 verschiedener Wert hier hat im Test (test_barometer, Sensor fest
+// auf dem Tisch, >3 Minuten Laufzeit) eine kontinuierliche Hoehen-Drift von
+// mehreren Metern erzeugt, obwohl Druck und Temperatur nahezu stabil waren -
+// der Term war fuer dieses Board falsch bemessen/gepolt. Mit 0.0f blieb die
+// Hoehe im selben Test trotz weiter leicht steigender Sensortemperatur stabil
+// (nur noch normales ADC-Rauschen, kein Trend).
+#define BARO_TEMP_COEFF 0.0f
 
 // ESC PWM-Parameter (Standard: 1000–2000 µs)
 #define ESC_MIN_US 1000

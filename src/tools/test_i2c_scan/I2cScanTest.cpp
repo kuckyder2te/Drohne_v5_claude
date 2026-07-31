@@ -62,13 +62,14 @@ namespace {
         int found = 0;
         for (uint8_t addr = 1; addr < 127; addr++)
         {
-            // Doppelprüfung: endTransmission + ein Byte lesen (echter ACK-Test)
+            // Nur Adress-ACK pruefen (Standard-Scan-Technik). Ein zusaetzlicher
+            // requestFrom()-Lesetest wurde hier bewusst entfernt: der MS5611
+            // liefert ohne vorheriges Kommando (siehe Barometer::_readRaw())
+            // keine gueltigen Daten und NACKt/liefert 0 Bytes, obwohl er per
+            // Adress-ACK laengst als vorhanden bestaetigt ist - ein zusaetzlicher
+            // Lesetest an dieser Stelle meldet ihn faelschlich als "nicht gefunden".
             Wire.beginTransmission(addr);
             if (Wire.endTransmission() != 0) continue;
-
-            Wire.requestFrom((int)addr, 1);
-            if (Wire.available() < 1) continue;
-            Wire.read();
 
             LOGGER_NOTICE_FMT("[I2C] Gefunden: 0x%02X", addr);
             found++;

@@ -40,6 +40,30 @@ void setup()
             delay(1000);
     }
     battery.begin();
+
+    // 90s Aufwaermzeit VOR calibrate(): der Sensor sitzt nah an Pico/Regler
+    // und heizt sich in den ersten Minuten selbst auf. calibrate() sofort nach
+    // begin() wuerde eine "kalte" _calTemp einfrieren; da tempDiff in update()
+    // = temperature - _calTemp ist, waechst die Schein-Kompensation dann mit
+    // der fortlaufenden Erwaermung immer weiter und die Hoehe driftet
+    // zunehmend ins Negative (siehe README "Barometer-Drift im Innenraum").
+    const uint32_t WARMUP_MS = 90000;
+    LOGGER_NOTICE("[BARO] Aufwaermphase (90s) vor Kalibrierung...");
+    uint32_t warmupStart = millis();
+    uint32_t lastReport = warmupStart;
+    while (millis() - warmupStart < WARMUP_MS)
+    {
+        baro.update();
+        if (millis() - lastReport >= 10000)
+        {
+            lastReport = millis();
+            uint32_t remainingS = (WARMUP_MS - (millis() - warmupStart)) / 1000;
+            LOGGER_NOTICE_FMT("[BARO] Aufwaermphase: noch %lu s", (unsigned long)remainingS);
+        }
+        delay(200);
+    }
+    LOGGER_NOTICE("[BARO] Aufwaermphase beendet, kalibriere...");
+    baro.calibrate();
 }
 
 void loop()
@@ -50,7 +74,7 @@ void loop()
     if (millis() - lastBaro >= 500)
     {
         lastBaro = millis();
-        LOGGER_NOTICE_FMT("[BARO] Hoehe: %.1f cm | Druck: %.2f hPa | Temp: %.1f C",
+        LOGGER_NOTICE_FMT("[BARO] Hoehe: %.1f cm | Druck: %.2f hPa | Temp: %.2f C",
                 baro.getAltitudeCm(),
                 baro.getPressure(),
                 baro.getTemperature());
