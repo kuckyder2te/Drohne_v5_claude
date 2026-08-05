@@ -68,8 +68,18 @@ void loop()
     }
 
     char cmd = 0;
+    static uint32_t lastByteMillis = 0;
     if (BT_UART.available())
+    {
         cmd = BT_UART.read();
+        uint32_t now = millis();
+        // Ein Mensch tippt keine 20 ms auseinander - schnellere Bytes sind
+        // Leitungsrauschen (z.B. beim Trennen der BT-Verbindung), keine
+        // echten Kommandos.
+        if (now - lastByteMillis < 20)
+            cmd = 0;
+        lastByteMillis = now;
+    }
 
     if (cmd != 0)
     {
