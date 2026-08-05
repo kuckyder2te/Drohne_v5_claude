@@ -48,18 +48,56 @@ Logging goes through the `bakercp/Logger` library, wrapped by [include/myLogger.
 
 The firmware implements a **cascaded PID altitude + attitude stabilizer** for a quadcopter running on RP2040. [src/main.cpp](src/main.cpp) is deliberately trivial — it includes only `<Arduino.h>` and [mode/NormalMode.h](include/mode/NormalMode.h), and its `setup()`/`loop()` just call `NormalMode::setup()`/`NormalMode::loop()`. [src/mode/NormalMode.cpp](src/mode/NormalMode.cpp) is the composition root: it *defines* the shared firmware objects as file-scope globals (`baro`, `battery`, `ultrasonic`, `flightController`, `settings`, `imu` — the same ones `cli.cpp` reaches via `extern`), sets up the CLI + sensors in `setup()`, and runs the control loop in `loop()`. The actual flight state and control logic (arm/disarm, safety checks, PID + motor mixing, status log) lives in [src/control/FlightController.cpp](src/control/FlightController.cpp), called from `NormalMode`. All hardware test tools are separate standalone programs under `src/tools/`, each its own `[env:test_*]` (see Test Modes below) — they never touch `main.cpp` or `NormalMode`.
 
+### Dual-Core-Aufteilung (seit dem Autotune-Umbau)
+
+Der Regelkreis läuft auf **beiden Kernen**. Auslöser war eine Messung: `NormalMode::loop()` lief real mit **~8–10 Hz**, nicht mit den nominellen 20 Hz, weil `Barometer::update()` 70 ms und `Ultrasonic::update()` 31–55 ms blockierend `delay()`en. `PID_INTERVAL_MS = 50` war damit wirkungslos, und bei ~150 ms Gesamttotzeit (plus IMU-DLPF_6 mit 5,7 Hz Bandbreite) gab es *keinen* Satz PID-Werte, der stabil schweben konnte — Tuning wäre sinnlos gewesen.
+
+| Kern | Aufgabe | Takt |
+|---|---|---|
+| **Kern 1** ([src/control/AttitudeLoop.cpp](src/control/AttitudeLoop.cpp)) | IMU lesen, Roll/Pitch-PID, Motor-Mixing, Recorder, Relay-Autotune | `ATTITUDE_RATE_HZ` = 400 Hz |
+| **Kern 0** ([src/mode/NormalMode.cpp](src/mode/NormalMode.cpp)) | Ultraschall, Batterie, CLI, Höhen-PID, Logging, Watchdog | ~50–100 Hz |
+
+`setup1()`/`loop1()` sind schwache Symbole im earlephilhower-Core; sind sie definiert, startet `main()` Kern 1 automatisch — kein Build-Flag nötig. Kern 1 läuft **vor** `setup()` von Kern 0 an, deshalb wartet `setup1()` auf `shared::g_core0Ready`.
+
+**Der Barometer ist abgeschaltet** (`BARO_ENABLED` in `config.h`, auskommentiert). MS5611 und ICM-20948 hängen am selben `Wire`-Bus; statt einen Mutex um jede Transaktion zu legen, bekommt Kern 1 den I2C-Bus exklusiv. Höhenquelle ist damit ausschließlich der Ultraschall. Wiedereinschalten heißt: Mutex um **alle** Wire-Transaktionen in `Barometer` *und* `IMU` — und der Mutex muss `requestFrom()` samt aller folgenden `read()` umfassen, `TwoWire::_buff` ist gemeinsamer Zustand.
+
+Fünf Dinge sind hier tragend und leicht zu zerstören:
+
+- **Kein `LOGGER_*` auf Kern 1.** Die `*_FMT`-Makros schreiben in den *einen* globalen `logBuf` aus `src/myLogger.cpp`; eine Ausgabe von Kern 1 zerstört eine gleichzeitig laufende von Kern 0 mitten im `sprintf`. Deshalb hat `PIDController` ein `setQuiet(bool)`, das `AttitudeLoop::begin()` auf seinen Instanzen setzt — `setKp`/`reset`/`enableIntegral` loggen sonst. Meldungen laufen stattdessen über `CoreTlm::abortCode`, den Kern 0 in `abortText()` übersetzt.
+- **`__atomic_*` ist auf dem RP2040 unbrauchbar.** Cortex-M0+ hat kein LDREX/STREX; GCC löst die Builtins über eine Interrupt-Sperre auf, die nur gegen ISRs desselben Kerns schützt, **nicht gegen den anderen Kern**. Nutzbar sind nur ausgerichtete 32-Bit-`volatile`-Zugriffe (auf dem RP2040-Bus atomar) und Mutexe. Beides in [include/control/SharedState.h](include/control/SharedState.h): `CoreCmd` per Mutex + Generationszähler, `CoreTlm` per Seqlock, `g_estop`/`g_beatC0`/`g_beatC1` lock-frei.
+- **Kern 1 wartet nie auf Kern 0.** `cmdFetch()` prüft lock-frei den Generationszähler und holt die neue Fassung nur, wenn `mutex_try_enter()` sofort gelingt — sonst regelt es mit der alten Kopie weiter. Ein CLI-Kommando kann den Regeltakt so nicht stören.
+- **Der Not-Aus verlässt sich nicht auf Kern 1.** `cli::update()` setzt bei `d` erst `g_estop`, dann schreibt Kern 0 die PWM-Register **selbst** über `MotorMixer::stopFast()` (logfrei, reine Registerzugriffe, von jedem Kern sicher). Kern 1 prüft `g_estop` als allererste Anweisung in `step()`.
+- **Beidseitiger Herzschlag.** Steht Kern 1, laufen die Motoren sonst mit dem letzten Wert weiter — der gefährlichste Zustand des Umbaus. Kern 0 prüft `g_beatC1` gegen `ATTITUDE_WATCHDOG_MS` (150 ms) und disarmt; Kern 1 prüft `g_beatC0` gegen `CORE0_WATCHDOG_MS` (500 ms) und stoppt die Motoren. `stats -hang` blockiert Kern 1 gezielt für 1 s, um das nachzuweisen — **dieser Test muss bestanden sein, bevor ein Propeller montiert wird.**
+
+Ein Nebeneffekt, der bewusst so ist: **`pid -save` und `tune -save` sind im armierten Zustand gesperrt.** `EEPROM.commit()` ruft `rp2040.idleOtherCore()` und friert Kern 1 für die gesamte Flash-Löschung ein — die Motoren stünden solange auf ihrem letzten Wert.
+
 ### Control Loop (`NormalMode::loop()`)
 
-1. **Sensor update** every loop iteration — barometer, ultrasonic, IMU all polled unconditionally in `NormalMode::loop()`.
-2. **Safety checks** — `FlightController::checkSafety()` disarms (`FlightController::disarm()`) on IMU-not-ready or an altitude jump > 500 cm between consecutive loop iterations (based on barometer altitude).
-3. **Input processing** — `cli::update()` ([src/comm/cli.cpp](src/comm/cli.cpp)) is the *only* input path; it runs first in `loop()`. The CLI wraps the `philj404/SimpleSerialShell` library and is bound to one stream, chosen by the `CLI_USE_BLUETOOTH` switch in `config.h` — `BT_UART`/`Serial1` when defined, `Serial`/USB otherwise (the current default). PID-tuning commands act on the `PIDController` instances owned by `FlightController` (`getPidHeight()`/`getPidRoll()`/`getPidPitch()`). See the CLI section below for the command set and its two non-obvious constraints.
-4. **Arm timeout** — `FlightController::updateArmPendingTimeout()` expires a pending ARM confirmation after 3 s.
-5. **Arm sequence** — `FlightController::requestArm()`: issuing `arm` twice within 3 s recalibrates the barometer, resets all three PID controllers, arms, and sets `targetHeightCm = 20`. `stop` (or a bare `d`) calls `FlightController::disarm()` (motors to `ESC_MIN_US`).
-6. **Height PID** (every `PID_INTERVAL_MS` = 50 ms, in `FlightController::updateControlLoop()`) — error = `targetHeightCm − currentAltitude`; altitude source is ultrasonic when valid, barometer otherwise. Output includes the `THROTTLE_OFFSET_US` baseline.
-7. **Anti-windup / liftoff gating** — the integral term on all three PID controllers only accumulates once `ultrasonic.isValid() && altitude > LIFTOFF_HEIGHT_CM` (`enableIntegral()`); it's cleared again on landing. This prevents integral windup while sitting on the ground pre-liftoff.
-8. **Attitude PID** — roll/pitch corrections from IMU angles, target = 0°; output is a pure ±500 correction (no offset).
-9. **Motor mixing** — X-configuration in `MotorMixer::mix()`, invoked from `FlightController::updateControlLoop()`: `FL = throttle − roll + pitch`, `FR = throttle + roll + pitch`, `BL = throttle − roll − pitch`, `BR = throttle + roll − pitch`. Depends only on motor position, not physical spin direction (fixed mechanically by ESC wiring) — see README.md "Drehrichtungen" for the CW/CCW mapping and prop-pitch safety note.
-10. **Status log** every 500 ms via `FlightController::logStatus()`, toggled at runtime with `statusLog`.
+**Kern 0** (`NormalMode::loop()`), ~50–100 Hz:
+
+1. **Input processing** — `cli::update()` ([src/comm/cli.cpp](src/comm/cli.cpp)) is the *only* input path; it runs first in `loop()`. The CLI wraps the `philj404/SimpleSerialShell` library and is bound to one stream, chosen by the `CLI_USE_BLUETOOTH` switch in `config.h` — `BT_UART`/`Serial1` when defined, `Serial`/USB otherwise (the current default). PID-tuning commands act on the `PIDController` instances owned by `FlightController` (`getPidHeight()`/`getPidRoll()`/`getPidPitch()`). See the CLI section below for the command set and its non-obvious constraints.
+2. **Sensor update auf festen Kadenzen** — Ultraschall alle `ULTRA_UPDATE_MS` (50 ms), Barometer alle `BARO_UPDATE_MS` (200 ms, aber nur mit `BARO_ENABLED`), Batterie ungetaktet. Vorher lief beides in *jedem* Durchlauf, was den Kern auf ~9 Hz drückte. Der IMU wird hier gar nicht mehr angefasst — er gehört Kern 1.
+3. **Telemetrie holen** — `shared::tlmRead()` liefert Lage, Drehraten, Motorwerte und Loop-Rate von Kern 1.
+4. **Kern-1-Watchdog** — bleibt `g_beatC1` länger als `ATTITUDE_WATCHDOG_MS` stehen, setzt Kern 0 `g_estop`, ruft `stopFast()` und disarmt.
+5. **Safety checks** — `FlightController::checkSafety()` disarmt bei IMU-not-ready (aus `CoreTlm::imuReady`) oder einem Höhensprung > 500 cm. Im Prüfstands-/Tune-Modus ist der Höhensprung-Check abgeschaltet — auf der Wippe misst der Ultraschall je nach Neigung Unsinn.
+6. **Arm timeout** — `FlightController::updateArmPendingTimeout()` expires a pending ARM confirmation after 3 s.
+7. **Arm sequence** — `FlightController::requestArm()`: `arm` zweimal innerhalb 3 s setzt alle Regler zurück, armt, setzt `targetHeightCm = 20` und `mode = MODE_FLIGHT`. Die Barometer-Rekalibrierung entfällt, solange `BARO_ENABLED` aus ist. `stop` (oder ein blankes `d`) ruft `disarm()`.
+8. **Height PID** (alle `PID_INTERVAL_MS` = 50 ms, in `FlightController::updateControlLoop()`) — error = `targetHeightCm − currentAltitude`, Quelle ist der Ultraschall. Das Ergebnis geht als `throttleUs` per `publish()` an Kern 1; **hier wird nicht mehr gemischt.**
+9. **Status log** alle 500 ms via `FlightController::logStatus()`, zur Laufzeit mit `statusLog` umschaltbar. Zeigt jetzt zusätzlich Roll/Pitch und die Ist-Loop-Rate von Kern 1.
+
+**Kern 1** (`attitude::step()`), 400 Hz:
+
+1. **Not-Aus zuerst** — `g_estop` wird als allererste Anweisung geprüft.
+2. **Takt halten** — selbstkorrigierend auf `ATTITUDE_PERIOD_US`, ohne Drift; Überschreitungen werden als `overruns` gezählt statt aufgeholt.
+3. **Vorgaben holen** — `cmdFetch()`, nie blockierend (s. o.).
+4. **Kern-0-Watchdog** — `g_beatC0` gegen `CORE0_WATCHDOG_MS`.
+5. **IMU lesen** — `imu.update(nowUs)` mit vorgegebenem Zeitstempel.
+6. **Attitude PID** — `computeWithRate(target, angle, gyroRate, dt)`. Der D-Anteil kommt aus der **Gyro-Rate**, nicht aus `(error − lastError)/dt`: bei 400 Hz ist der Differenzenquotient auf einem verrauschten Winkel unbrauchbar, und die Rate *ist* die Ableitung des Winkels. Nebeneffekt: kein Derivative-Kick bei Sollwertsprüngen — die erzeugt das Relais beim Autotuning garantiert.
+7. **Motor mixing** — X-Konfiguration in `MotorMixer::mix()`: `FL = throttle − roll + pitch`, `FR = throttle + roll + pitch`, `BL = throttle − roll − pitch`, `BR = throttle + roll − pitch`, geklemmt auf `[ESC_MIN_US, _maxUs]`. Hängt nur von der Motorposition ab, nicht von der Drehrichtung (mechanisch über die ESC-Verkabelung festgelegt) — siehe README.md "Drehrichtungen".
+8. **Recorder/Autotune** — in `MODE_BENCH`/`MODE_TUNE`, siehe unten.
+9. **Telemetrie veröffentlichen** + Herzschlag.
+
+**Anti-windup / liftoff gating** liegt weiterhin bei `ultrasonic.isValid() && altitude > LIFTOFF_HEIGHT_CM`; Kern 0 ermittelt das Gate und schickt es als `CoreCmd::integralOn` mit. Am Prüfstand greift es nie — dort steht das Gerät fest.
 
 ### Module Map
 
@@ -69,8 +107,12 @@ The firmware implements a **cascaded PID altitude + attitude stabilizer** for a 
 | [include/pins.h](include/pins.h) | Single source of truth for all GPIO assignments |
 | [include/myLogger.h](include/myLogger.h) | `LOGGER_*` macros over the `bakercp/Logger` library, plus the shared `logBuf` used by the `*_FMT` variants. Output function `localLogger()` lives in `src/myLogger.cpp` and writes to `Serial` and/or `BT_UART` per `_SERIAL_LOG`/`_BT_LOG`; each standalone tool under `src/tools/` defines its own `logBuf` and sets its own log level, since `myLogger.cpp` isn't in its build |
 | [lib/MotorMixer/MotorMixer.cpp](lib/MotorMixer/MotorMixer.cpp) | PWM to ESCs using native RP2040 `hardware/pwm.h` SDK (50 Hz, 20000 wrap, 1000–2000 µs) |
-| [src/control/PIDController.cpp](src/control/PIDController.cpp) | Custom PID — `useOffset=true` (height) adds `THROTTLE_OFFSET_US` so output is absolute throttle clamped to `[ESC_MIN_US, ESC_MAX_US]`; `useOffset=false` (roll/pitch) outputs a pure ±500 correction; integral only accumulates while `enableIntegral(true)` |
-| [lib/IMU/IMU.cpp](lib/IMU/IMU.cpp) | ICM-20948 9-DoF via the `wollewald/ICM20948_WE` library at I2C address **0x69** (board-specific quirk — datasheet implies 0x68 for AD0=GND); complementary filter (`alpha=0.98`) fusing gyro integration with accel-derived roll/pitch; I2C bus recovery via 9 SCL pulses in `IMU::begin(true)` before `Wire.begin()` |
+| [src/control/PIDController.cpp](src/control/PIDController.cpp) | Custom PID — `useOffset=true` (height) adds `THROTTLE_OFFSET_US` so output is absolute throttle clamped to `[ESC_MIN_US, ESC_MAX_US]`; `useOffset=false` (roll/pitch) outputs a pure ±500 correction; integral only accumulates while `enableIntegral(true)`. Zeitbasis ist **`micros()`** (bei 2,5 ms Zyklus wäre `millis()` bis zu 40 % daneben). `computeWithRate()` nimmt den D-Anteil aus einer gemessenen Rate; `setQuiet()` schaltet alle `LOGGER_*` ab — Pflicht für jede Instanz auf Kern 1 |
+| [src/control/SharedState.cpp](src/control/SharedState.cpp) | Datenaustausch zwischen den Kernen: `CoreCmd` (Kern 0 → 1, Mutex + Generationszähler), `CoreTlm` (Kern 1 → 0, Seqlock), `TuneResult`, sowie `g_estop`/`g_beatC0`/`g_beatC1` lock-frei |
+| [src/control/AttitudeLoop.cpp](src/control/AttitudeLoop.cpp) | Der Regelkreis auf Kern 1: IMU, Roll/Pitch-PID, Mixing, Betriebsarten `MODE_FLIGHT`/`MODE_BENCH`/`MODE_TUNE`, Abbruchüberwachung. Loggt nie und wartet nie auf Kern 0 |
+| [src/control/Recorder.cpp](src/control/Recorder.cpp) | Ringpuffer für den Messschrieb: 20 B/Sample × `REC_CAPACITY` (3000) = 60 kB in der `.bss`, bei `REC_DECIMATION` = 2 sind das 15 s @ 200 Hz. Ein Erzeuger (Kern 1), ein Verbraucher (Kern 0), lockfrei — der Verbraucher liest nur nach `isActive() == false` |
+| [src/control/RelayTuner.cpp](src/control/RelayTuner.cpp) | Relay-Feedback-Autotune: Zweipunktregler mit Hysterese, Periodenmessung über die steigenden Flanken, Ku/Tu-Statistik. Läuft auf Kern 1, weil die Umschaltzeitpunkte µs-Auflösung brauchen |
+| [lib/IMU/IMU.cpp](lib/IMU/IMU.cpp) | ICM-20948 9-DoF via the `wollewald/ICM20948_WE` library at I2C address **0x69** (board-specific quirk — datasheet implies 0x68 for AD0=GND); complementary filter fusing gyro integration with accel-derived roll/pitch; I2C bus recovery via 9 SCL pulses in `IMU::begin(true)` before `Wire.begin()`. **DLPF: Gyro `DLPF_3` (51,2 Hz), Accel `DLPF_4` (23,9 Hz)** — vorher `DLPF_6` (5,7 Hz) auf beiden, was >30 ms Gruppenlaufzeit bedeutete. `alpha` wird je Zyklus als `tau/(tau+dt)` berechnet (`IMU_TAU_S`) statt fest verdrahtet; Gyro-Bereich 500 dps wegen der Relais-Anregung |
 | [lib/Barometer/Barometer.cpp](lib/Barometer/Barometer.cpp) | MS5611 (0x77); needs a 90 s warmup + calibration before it's trustworthy; ring-buffer filter; `BARO_TEMP_COEFF` compensates thermal drift; expects `Wire` already initialized by its caller |
 | [lib/Ultrasonic/Ultrasonic.cpp](lib/Ultrasonic/Ultrasonic.cpp) | HC-SR04 on pins 8/6; valid range ~2–300 cm; preferred altitude source over barometer whenever `isValid()` |
 | [lib/Battery/Battery.cpp](lib/Battery/Battery.cpp) | ADC pin 26, voltage divider; warns/critical via buzzer pin 10 |
@@ -92,6 +134,9 @@ The CLI is the firmware's only input path. It replaced `CommChannel`/`InputHandl
 | `pid [axis] [-Kp/-Ki/-Kd v] [-save] [-reset]` | read/write/persist all PID coefficients — see below |
 | `setHeight <cm>` / `getHeight` | clamped to `[THROTTLE_MIN_CM, MAX_HEIGHT_CM]` |
 | `getArmed` | flight state |
+| `stats [-hang]` | Zustand von Kern 1 als JSON; `-hang` ist der Watchdog-Nachweis |
+| `bench [...]` | Prüfstandsbetrieb auf einer Achse + Messschrieb — siehe unten |
+| `tune [...]` | Relay-Feedback-Autotune — siehe unten |
 | `help` | command list + the immediate-key chapter — see below |
 
 **`pid`** replaced nine `setK*Height`/`Roll`/`Pitch` setters plus `getPid`, `save` and `reset` with one command. `pid -h` prints its own option help.
@@ -127,6 +172,55 @@ Four things about this module are load-bearing and easy to break:
 
 `cli::begin()` prints a short greeting on whichever stream it attached to, so the channel never looks dead just because `LOGGER_NOTICE()` was pointed elsewhere.
 
+### Prüfstand (`bench`) und Autotune (`tune`)
+
+Beide arbeiten auf einer **1-Achsen-Wippe**: das Gerät ist so eingespannt, dass es nur um Roll *oder* Pitch kippen kann. Der Höhenregler ist dabei komplett abgeschaltet und die Throttle fest — es geht ausschließlich um die Lageregelung.
+
+```
+bench -roll -throttle 1300 -max 1600 -go     Pruefstand starten (2x -go bestaetigen)
+bench -dump [-n 500]                          Messschrieb als CSV (nur disarmt)
+tune -roll -h 60 -eps 1.0 -go                 Autotune starten
+tune -show                                    Ergebnis ansehen, ohne zu uebernehmen
+tune -apply                                   Kp und Kd uebernehmen
+tune -save                                    uebernehmen und ins EEPROM (nur disarmt)
+```
+
+**Wie `tune` misst.** Statt eines PID-Reglers wirkt ein Zweipunktregler mit Hysterese auf die Achse. Der treibt die Strecke von selbst in eine Dauerschwingung, und zwar genau bei der kritischen Frequenz, an der ein P-Regler an der Stabilitätsgrenze stünde. Der Vorteil gegenüber „Kp erhöhen bis es schwingt": die Amplitude bleibt durch `h` begrenzt und wächst nicht unkontrolliert. Aus der Schwingung folgen `Tu` (Periodendauer, aus den steigenden Flanken) und `Ku = 4h / (π·√(a²−ε²))`.
+
+**Einheitenprobe:** `h` steht in µs (Mixer-Korrektur), `a` in Grad, also hat `Ku` die Einheit µs/Grad — genau die Einheit von `Kp` in diesem Code (`rollCorr = Kp · error[Grad]` geht direkt in `mix()`). `Ku` ist damit unmittelbar mit `Kp` vergleichbar.
+
+**Einstellregeln** (`-rule`, Parallelform `out = Kp·e + Ki·∫e + Kd·ė`):
+
+| Regel | Kp | Ki | Kd |
+|---|---|---|---|
+| `zn` (klassisch) | 0,60·Ku | 1,20·Ku/Tu | 0,075·Ku·Tu |
+| `pi` | 0,45·Ku | 0,54·Ku/Tu | 0 |
+| `pessen` | 0,70·Ku | 1,75·Ku/Tu | 0,105·Ku·Tu |
+| `some` | 0,33·Ku | 0,66·Ku/Tu | 0,110·Ku·Tu |
+| **`no` (Vorgabe)** | **0,20·Ku** | 0,40·Ku/Tu | 0,066·Ku·Tu |
+
+Warum nicht Ziegler-Nichols als Vorgabe: ZN zielt auf ein Amplitudenverhältnis von 1:4 je Periode, also ~25 % Überschwingen und nur etwa Faktor 2 Verstärkungsreserve. Die Wippe bildet aber nicht alle Totzeiten des Flugs ab (ESC-Ansprechzeit, Propellerhochlauf, Rahmenelastizität), und das Trägheitsmoment ist ein anderes. Bei Reserve 2 genügt eine andere Batteriespannung, um in die Instabilität zu kippen. **Das Ergebnis ist ein Startwert, kein Endergebnis** — vor dem ersten freien Flug Kd halbieren und mit Ki = 0 beginnen.
+
+Vier Entwurfsentscheidungen, die leicht falsch „korrigiert" werden:
+
+- **`-apply` setzt nur Kp und Kd; Ki braucht das ausdrückliche `-ki`.** Bei realistischem Ku ≈ 20 µs/° und Tu ≈ 0,3 s ergäbe `no` ein Ki ≈ 27; das Integral akkumuliert Grad·Sekunden und ist auf ±500 begrenzt — nach 1 s bei 5° Fehler wäre der Regler in der Sättigung. Zudem hängt `_integralEnabled` am Liftoff-Gate, das auf der Wippe nie greift.
+- **Ein berechneter Koeffizient außerhalb `[0, 255]` verweigert `-apply`**, statt sich von `_clampCoeff()` still auf 255 klemmen zu lassen. Der Clamp ist als Tippfehlerschutz gedacht, nicht als Ventil für eine entgleiste Rechnung.
+- **Bei `tune` ist die Hilfe `-help`, nicht `-h`** — `-h` ist dort die Relaisamplitude und der weitaus häufiger getippte Parameter. `bench` und `pid` nehmen weiterhin `-h`.
+- **`bench -go` und `tune -go` verlangen eine zweite Bestätigung innerhalb 3 s**, dasselbe Muster wie `requestArm()`. Ein Tippfehler soll keine Motoren anwerfen.
+
+Abbrüche werden auf Kern 1 jeden Zyklus geprüft (Winkelgrenze in 3 Zyklen in Folge, Timeout, `g_estop`, Kern-0-Herzschlag, Disarm, IMU-Fehler, und bei `tune` zusätzlich „keine Umschaltung > `TUNE_NOSWITCH_MS`" = keine Schwingung). Der Code landet in `CoreTlm::abortCode`, Kern 0 übersetzt ihn in `abortText()` — Kern 1 darf nicht loggen.
+
+**Reihenfolge der Inbetriebnahme** (die ersten beiden Schritte ohne Propeller):
+
+1. `stats` → `loopHz` muss ~400 sein, `overruns` = 0.
+2. `stats -hang` → muss innerhalb 150 ms `[SAFETY] Kern 1 antwortet nicht` auslösen. **Ohne diesen bestandenen Test darf kein Propeller montiert werden.**
+3. `tune -roll -h 60 -go` ohne Propeller → muss nach 3 s mit `ABORT_NOSWITCH` enden (es kann keine Schwingung entstehen). Prüft den Abbruchpfad.
+4. Mit Propellern, eingespannt: `arm`, `tune -roll -go`, danach `bench -dump`. Im CSV muss `out_us` eine saubere Rechteckschwingung zwischen −h und +h zeigen und `angle_deg` eine gleichmäßige Schwingung. `spread` < 0,1.
+5. **Validierung der Methode:** `pid -roll -Kp <Ku> -Ki 0 -Kd 0` setzen und `bench -go`. Per Definition von Ku muss die Achse jetzt *grenzstabil* schwingen — schwingt sie auf oder klingt sie ab, ist Ku falsch und alle abgeleiteten Werte sind wertlos.
+6. Erst danach `tune -apply`.
+
+Der Messschrieb geht über `shell.print` auf den CLI-Kanal, also aktuell USB @115200 (≈ 14 s für den vollen Puffer). Über BT @9600 wären es ~156 s — deshalb ist der Dump nur disarmiert erlaubt und zählt in der Druckschleife `g_beatC0` weiter, sonst liefe der Herzschlag ab.
+
 ### Test Modes
 
 Six former `TEST_*` modes are standalone tools under [src/tools/](src/tools/) — each its own tiny program (own `setup()`/`loop()`) and its own PlatformIO environment `[env:test_<name>]`. Each env sets `build_src_filter = -<*> +<tools/test_<name>/>`, so **only that one tool folder** compiles (main.cpp/NormalMode/the rest of `src/` are excluded); `lib/` is still auto-linked, giving each tool just the driver module(s) it actually `#include`s. Each tool also defines its own `logBuf` and calls `Logger::setLogLevel(Logger::NOTICE)` in `setup()`, since `src/myLogger.cpp` isn't in its build while `lib/` — which uses the `*_FMT` macros — is linked anyway:
@@ -160,6 +254,9 @@ The former in-firmware `TEST_KEYBOARD` (BT/keyboard command echo + PID tuning) h
 - **One CLI on one stream, chosen at compile time** — the shell is a singleton and can only serve a single `Stream`, so `CLI_USE_BLUETOOTH` in `config.h` picks it: `cli::begin(BT_UART)` when defined, `cli::begin(Serial)` otherwise — a single `#ifdef` in `NormalMode::setup()`, evaluated only after the chosen `Stream` (pins + `begin()`) is fully configured. There is no BT-primary/USB-fallback redundancy; switching channels means flipping the switch and recompiling. Logging is decoupled from this and is *not* a singleton: `localLogger()` writes to `Serial` and/or `Serial1` per `_SERIAL_LOG`/`_BT_LOG`, so logs can go to both channels at once, or to the channel the shell is *not* on — which is the current setup (shell on USB, logs on BT).
 - **Emergency disarm bypasses the shell** — `cli::update()` reads `d` (and `+`/`-`) straight off the stream before `shell.executeIfInput()`, so disarm needs one keypress instead of a full line plus Enter. The cost is a naming constraint (no command may start with `d`) and line-position tracking (`atLineStart`), both documented in the CLI section. The old `CommChannel` solved the same problem with a 200 ms single-char timeout, which is why its `d` was *not* byte-instant.
 - **Yaw = 0 currently** — gyro-based yaw stabilization deferred to Phase 3; only the complementary-filtered roll/pitch are used for attitude control.
+- **Lageregelung auf Kern 1 statt nicht-blockierender Sensortreiber** — die Alternative wäre gewesen, `Barometer::update()` und `Ultrasonic::update()` in State-Machines zu zerlegen. Der zweite Kern war ungenutzt und liefert das Ergebnis ohne Eingriff in erprobte Treiber; der Preis ist die Synchronisation (siehe Dual-Core-Abschnitt) und der abgeschaltete Barometer.
+- **D-Anteil aus der Gyro-Rate** (`computeWithRate()`) statt aus `(error − lastError)/dt` — bei 400 Hz ist der Differenzenquotient auf einem verrauschten Winkel unbrauchbar, und die Rate ist die Ableitung ohnehin schon. Beseitigt zugleich den Derivative-Kick bei Sollwertsprüngen.
+- **Relay-Feedback statt aufsteigendem Kp** für die Ermittlung von Ku/Tu — die Amplitude bleibt durch `h` begrenzt, statt beim Suchen der Stabilitätsgrenze unkontrolliert zu wachsen.
 
 ### Planned Phases (not yet implemented)
 
@@ -172,8 +269,10 @@ The former in-firmware `TEST_KEYBOARD` (BT/keyboard command echo + PID tuning) h
 
 See README.md for full hardware detail (pinout table, motor spin-direction verification, ESD handling procedure, power-on/off sequencing). Highlights relevant to code changes:
 
+- **Kein Barometer im Flugbetrieb**: erwartet — `BARO_ENABLED` ist in `config.h` auskommentiert, damit Kern 1 den I2C-Bus exklusiv hat. `recalibrate` meldet das entsprechend, Höhe kommt nur vom Ultraschall. Das Barometer selbst ist unverändert und über `pio run -e test_barometer` weiterhin prüfbar.
+- **`loopHz` in `stats` deutlich unter 400**: `overruns` mitprüfen. Steigt der Wert, braucht ein Zyklus länger als `ATTITUDE_PERIOD_US` — meist ein versehentlich auf Kern 1 gelandeter blockierender Aufruf (`delay()`, `LOGGER_*`, `Serial.print`).
 - **MS5611 not found**: check PS/NCS pins on the CJMCU-10DOF-style board are tied to 3.3 V; run `pio run -e test_i2c_scan --target upload`.
-- **Barometer drift indoors**: needs the full 90 s warmup and a `recalibrate` immediately before arming.
+- **Barometer drift indoors**: needs the full 90 s warmup and a `recalibrate` immediately before arming (nur relevant mit `BARO_ENABLED`).
 - **No `[CTRL]`/`[SAFETY]` messages over USB**: expected — `_SERIAL_LOG` is off, logs go to BT only. Define `_SERIAL_LOG` in `config.h` to mirror them onto USB. Conversely, if the CLI prompt is missing on COM11, check that `CLI_USE_BLUETOOTH` is still commented out.
 - **Pico not detected by picotool**: hold BOOTSEL, flash `flash_nuke.uf2`, then re-flash normally.
 - **ICM-20948 not found despite correct wiring**: confirm it enumerates at 0x69, not 0x68, via `pio run -e test_i2c_scan --target upload`.

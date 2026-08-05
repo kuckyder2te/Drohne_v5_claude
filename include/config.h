@@ -18,6 +18,62 @@
 // PlatformIO-Umgebungen unter src/tools/ (siehe src/tools/README, z.B.
 // "pio run -e test_imu --target upload").
 
+// ── Barometer im Flugbetrieb ───────────────────────────────
+// AUSGESCHALTET. Grund: Der Lageregelkreis laeuft seit dem Dual-Core-Umbau auf
+// Kern 1 und pollt den ICM-20948 mit ATTITUDE_RATE_HZ. MS5611 und IMU haengen
+// am selben Wire-Bus; ein paralleler Barometer-Zugriff von Kern 0 wuerde den
+// Bus teilen und braeuchte einen Mutex. Da der Baro ohnehin 90 s Warmlauf
+// braucht und der Ultraschall im Tuning-Bereich (2-300 cm) genauer ist,
+// bekommt Kern 1 den I2C-Bus stattdessen exklusiv - das haelt den
+// Lage-Regelkreis frei von jedem Fremdzugriff.
+//
+// Wieder einschalten heisst: Mutex um alle Wire-Transaktionen in Barometer
+// UND IMU legen (der Mutex muss requestFrom() samt aller folgenden read()
+// umfassen, TwoWire::_buff ist gemeinsamer Zustand).
+// Solange dies aus ist, ist der Ultraschall die einzige Hoehenquelle.
+//#define BARO_ENABLED
+
+// ── Dual-Core Lageregelung ─────────────────────────────────
+// Kern 1: IMU lesen, Roll/Pitch-PID, Motor-Mixing.
+// Kern 0: Ultraschall, Batterie, CLI, Hoehen-PID, Logging.
+#define ATTITUDE_RATE_HZ     400
+#define ATTITUDE_PERIOD_US   (1000000UL / ATTITUDE_RATE_HZ)
+
+// Zeitkonstante des Komplementaerfilters. alpha wird daraus je Zyklus
+// berechnet (alpha = tau/(tau+dt)) statt fest verdrahtet - bei 2,5 ms
+// Zykluszeit waere das alte alpha=0.98 eine Zeitkonstante von 0,12 s.
+#define IMU_TAU_S            0.5f
+
+// Reisst der Herzschlag des jeweils anderen Kerns ab, gehen die Motoren aus.
+// Kern 0 braucht mit Ultraschall (~50 ms) deutlich mehr Luft als Kern 1.
+#define ATTITUDE_WATCHDOG_MS 150
+#define CORE0_WATCHDOG_MS    500
+
+// Kadenzen auf Kern 0 - vorher lief beides in jedem Durchlauf, was den
+// Kern auf ~9 Hz gedrueckt hat.
+#define ULTRA_UPDATE_MS      50
+#define BARO_UPDATE_MS       200
+
+// ── Pruefstand (1-Achsen-Wippe) ────────────────────────────
+#define BENCH_THROTTLE_US    1300
+#define BENCH_MAX_US         1600
+#define BENCH_LIMIT_DEG      25.0f
+#define BENCH_TIMEOUT_S      20
+
+// ── Relay-Feedback-Autotune (Aastroem-Haegglund) ───────────
+#define TUNE_H_US            60.0f    // Relais-Amplitude
+#define TUNE_EPS_DEG         1.0f     // Hysterese
+#define TUNE_CYCLES          6        // auszuwertende Perioden
+#define TUNE_WARMUP_CYCLES   2        // verworfene Einschwing-Perioden
+#define TUNE_LIMIT_DEG       20.0f
+#define TUNE_TIMEOUT_S       30
+#define TUNE_NOSWITCH_MS     3000     // keine Umschaltung -> keine Schwingung
+
+// ── Recorder ───────────────────────────────────────────────
+// 3000 * 20 B = 60 kB in der .bss, bei REC_DECIMATION=2 sind das 15 s @200 Hz.
+#define REC_CAPACITY         3000
+#define REC_DECIMATION       2
+
 // Zusaetzliche manuelle Temperaturkompensation der Druckmessung - deaktiviert.
 // Die MS5611/5607-Formel kompensiert Temperatur bereits selbst ueber die
 // C5/C6-PROM-Koeffizienten (siehe TEMP-Berechnung in Barometer::update()).

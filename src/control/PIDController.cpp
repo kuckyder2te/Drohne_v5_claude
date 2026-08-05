@@ -9,14 +9,18 @@ float PIDController::_clampCoeff(float val, const char *name)
 {
     if (val < PID_COEFF_MIN)
     {
-        LOGGER_NOTICE_FMT("[PID] WARNUNG: %s", name);             // Serial.print(name);
-        LOGGER_NOTICE_FMT(" zu klein → auf %.4f", PID_COEFF_MIN); // Serial.println(PID_COEFF_MIN, 4);
+        if (!_quiet) {
+            LOGGER_NOTICE_FMT("[PID] WARNUNG: %s", name);             // Serial.print(name);
+            LOGGER_NOTICE_FMT(" zu klein → auf %.4f", PID_COEFF_MIN); // Serial.println(PID_COEFF_MIN, 4);
+        }
         return PID_COEFF_MIN;
     }
     if (val > PID_COEFF_MAX)
     {
-        LOGGER_NOTICE_FMT("[PID] WARNUNG: %s", name);
-        LOGGER_NOTICE_FMT(" zu groß → auf %.4f", PID_COEFF_MAX);
+        if (!_quiet) {
+            LOGGER_NOTICE_FMT("[PID] WARNUNG: %s", name);
+            LOGGER_NOTICE_FMT(" zu groß → auf %.4f", PID_COEFF_MAX);
+        }
         return PID_COEFF_MAX;
     }
     return val;
@@ -28,36 +32,73 @@ void PIDController::begin()
     _ki = _clampCoeff(_ki, "Ki");
     _kd = _clampCoeff(_kd, "Kd");
     reset();
+    if (_quiet) return;
     LOGGER_NOTICE("[PID] Regler initialisiert (eigene Implementierung)");
     LOGGER_NOTICE_FMT("[PID] Kp=%.4f", _kp);
     LOGGER_NOTICE_FMT("[PID] Ki=%.4f", _ki);
     LOGGER_NOTICE_FMT("[PID] Kd=%.4f", _kd);
 }
 
+// Zeitbasis ist micros(), nicht mehr millis(): bei ATTITUDE_RATE_HZ betraegt
+// ein Zyklus 2,5 ms, die Millisekunden-Aufloesung haette dt zwischen 2 und 3
+// springen lassen - ein Fehler von bis zu 40 % direkt im D-Anteil.
 float PIDController::compute(float setpoint, float measured)
 {
-    float now = millis() / 1000.0f;
-    float dt = now - _lastTime;
+    uint32_t now = micros();
+    float dt = _firstRun ? 0.0f : (uint32_t)(now - _lastUs) * 1e-6f;
+    _lastUs   = now;
+    _firstRun = false;
+    return _core(setpoint, measured, dt, false, 0.0f);
+}
 
-    if (dt <= 0.0f || dt > 1.0f)
+float PIDController::compute(float setpoint, float measured, float dt)
+{
+    _lastUs   = micros();
+    _firstRun = false;
+    return _core(setpoint, measured, dt, false, 0.0f);
+}
+
+float PIDController::computeWithRate(float setpoint, float measured, float rate, float dt)
+{
+    _lastUs   = micros();
+    _firstRun = false;
+    return _core(setpoint, measured, dt, true, rate);
+}
+
+float PIDController::_core(float setpoint, float measured, float dt, bool useRate, float rate)
+{
+    float error = setpoint - measured;
+
+    // Untergrenze 100 us schuetzt den Differenzenquotienten vor einer
+    // Division durch nahezu null; Obergrenze faengt Aussetzer ab.
+    if (dt < 1e-4f || dt > 0.5f)
     {
-        _lastTime = now;
-        return _useOffset ? ESC_MIN_US : 0.0f; // ← 0 für Roll/Pitch!
+        // Fehler trotzdem uebernehmen: sonst bildet der naechste regulaere
+        // Zyklus die Differenz gegen einen veralteten Wert und erzeugt einen
+        // kuenstlichen D-Ausschlag.
+        _lastError = error;
+        _lastP = _lastI = _lastD = 0.0f;
+        _lastThrottle = _useOffset ? (float)ESC_MIN_US : 0.0f;
+        return _lastThrottle;
     }
 
-    float error = setpoint - measured;
     if (_integralEnabled) {
         _integral += error * dt;
         _integral = constrain(_integral, _integralMin, _integralMax);
     }
-    float derivative = (error - _lastError) / dt;
 
-    // Basis-Offset + PID Output
-    float output = (_useOffset ? THROTTLE_OFFSET_US : 0.0f) + (_kp * error) + (_ki * _integral) + (_kd * derivative);
+    // Bei konstantem Sollwert ist d(error)/dt = -d(measured)/dt = -rate.
+    float derivative = useRate ? -rate : (error - _lastError) / dt;
+
+    _lastP = _kp * error;
+    _lastI = _ki * _integral;
+    _lastD = _kd * derivative;
+
+    float output = (_useOffset ? THROTTLE_OFFSET_US : 0.0f) + _lastP + _lastI + _lastD;
 
     if (_useOffset)
     {
-        output = constrain(output, ESC_MIN_US, ESC_MAX_US);
+        output = constrain(output, (float)ESC_MIN_US, (float)ESC_MAX_US);
     }
     else
     {
@@ -65,8 +106,6 @@ float PIDController::compute(float setpoint, float measured)
     }
 
     _lastError = error;
-    _lastTime = now;
-
     _lastThrottle = output;
 
     return output;
@@ -76,36 +115,44 @@ void PIDController::reset()
 {
     _integral     = 0.0f;
     _lastError    = 0.0f;
-    _lastTime     = millis() / 1000.0f;
+    _lastUs       = micros();
+    _firstRun     = true;
+    _lastP = _lastI = _lastD = 0.0f;
     _lastThrottle = _useOffset ? (float)ESC_MIN_US : 0.0f;
-    LOGGER_NOTICE("[PID] Reset");
+    if (!_quiet) LOGGER_NOTICE("[PID] Reset");
+}
+
+void PIDController::resyncTime()
+{
+    _lastUs   = micros();
+    _firstRun = true;
 }
 
 void PIDController::setKp(float kp)
 {
     _kp = _clampCoeff(kp, "Kp");
-    LOGGER_NOTICE_FMT("[PID] Kp=%.4f", _kp);
+    if (!_quiet) LOGGER_NOTICE_FMT("[PID] Kp=%.4f", _kp);
 }
 
 void PIDController::setKi(float ki)
 {
     _ki = _clampCoeff(ki, "Ki");
-    LOGGER_NOTICE_FMT("[PID] Ki=%.4f", _ki);
+    if (!_quiet) LOGGER_NOTICE_FMT("[PID] Ki=%.4f", _ki);
 }
 
 void PIDController::setKd(float kd)
 {
     _kd = _clampCoeff(kd, "Kd");
-    LOGGER_NOTICE_FMT("[PID] Kd=%.4f", _kd);
+    if (!_quiet) LOGGER_NOTICE_FMT("[PID] Kd=%.4f", _kd);
 }
 
 void PIDController::enableIntegral(bool enable)
 {
     if (_integralEnabled && !enable) {
         _integral = 0.0f; // Integral löschen beim Landen
-        LOGGER_NOTICE("[PID] Integral deaktiviert (Landung)");
+        if (!_quiet) LOGGER_NOTICE("[PID] Integral deaktiviert (Landung)");
     } else if (!_integralEnabled && enable) {
-        LOGGER_NOTICE("[PID] Integral aktiv (abgehoben)");
+        if (!_quiet) LOGGER_NOTICE("[PID] Integral aktiv (abgehoben)");
     }
     _integralEnabled = enable;
 }

@@ -53,6 +53,30 @@ void MotorMixer::stop()
     LOGGER_NOTICE("[MOTOR] STOP");
 }
 
+// Not-Aus ohne Logausgabe und ohne Umweg ueber setThrottle(). Vier
+// Registerschreibzugriffe, sonst nichts - damit ist das von jedem Kern
+// und aus jedem Zustand heraus sicher aufrufbar und braucht keine
+// Zusammenarbeit des anderen Kerns.
+void MotorMixer::stopFast()
+{
+    _fl = _fr = _bl = _br = ESC_MIN_US;
+    _throttle_us = ESC_MIN_US;
+    _writePWM(PIN_MOTOR_FL, ESC_MIN_US);
+    _writePWM(PIN_MOTOR_FR, ESC_MIN_US);
+    _writePWM(PIN_MOTOR_BL, ESC_MIN_US);
+    _writePWM(PIN_MOTOR_BR, ESC_MIN_US);
+}
+
+uint16_t MotorMixer::getMotorUs(uint8_t i) const
+{
+    switch (i) {
+        case 0:  return _fl;
+        case 1:  return _fr;
+        case 2:  return _bl;
+        default: return _br;
+    }
+}
+
 // ── Einzelmotor Test ───────────────────────────────────────
 void MotorMixer::setSingle(uint8_t motor, uint16_t throttle)
 {
@@ -91,11 +115,12 @@ void MotorMixer::setSingle(uint8_t motor, uint16_t throttle)
 void MotorMixer::mix(uint16_t throttle, float roll, float pitch, float yaw)
 {
     float t = (float)throttle;
+    float hi = (float)_maxUs;   // Pruefstand-Obergrenze, sonst ESC_MAX_US
 
-    _fl = (uint16_t)constrain(t - roll + pitch, ESC_MIN_US, ESC_MAX_US);
-    _fr = (uint16_t)constrain(t + roll + pitch, ESC_MIN_US, ESC_MAX_US);
-    _bl = (uint16_t)constrain(t - roll - pitch, ESC_MIN_US, ESC_MAX_US);
-    _br = (uint16_t)constrain(t + roll - pitch, ESC_MIN_US, ESC_MAX_US);
+    _fl = (uint16_t)constrain(t - roll + pitch, (float)ESC_MIN_US, hi);
+    _fr = (uint16_t)constrain(t + roll + pitch, (float)ESC_MIN_US, hi);
+    _bl = (uint16_t)constrain(t - roll - pitch, (float)ESC_MIN_US, hi);
+    _br = (uint16_t)constrain(t + roll - pitch, (float)ESC_MIN_US, hi);
 
     _writePWM(PIN_MOTOR_FL, _fl);
     _writePWM(PIN_MOTOR_FR, _fr);
