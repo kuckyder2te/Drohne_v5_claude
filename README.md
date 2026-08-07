@@ -354,15 +354,15 @@ build_flags =
 
 | Parameter | Wert |
 |---|---|
-| Oversampling | OSR_ULTRA_HIGH |
-| Filter | Gleitender Mittelwert, 20 Samples |
+| Oversampling | OSR_ULTRA_HIGH (dokumentierter Sollwert — Code nutzt derzeit tatsächlich OSR=1024, siehe [Troubleshooting](#oversampling-diskrepanz-dokumentation-vs-code)) |
+| Filter | Gleitender Mittelwert, 20 Samples (`BARO_FILTER_SIZE` in `Barometer.h` steht derzeit auf 5) |
 | Aufwärmzeit | 90 Sekunden |
 | Kalibrierung | 20 Messungen à 100ms |
 | Genauigkeit (Stillstand) | ± 1 cm |
-| I2C Adresse MS5611 | 0x77 |
+| I2C Adresse MS5611 (tatsächlich MS5607, siehe [Troubleshooting](#chip-ist-tatsächlich-ms5607-nicht-ms5611)) | 0x77 |
 | I2C Adresse ICM-20948 | 0x69 (AD0=GND, siehe Hinweis in [Hardware](#hardware)) |
 
-> ℹ️ Der MS5611 ist sehr empfindlich — Handbewegungen in der Nähe beeinflussen die Messung. Im Freien deutlich stabiler als im Innenraum.
+> ℹ️ Der MS5611(MS5607) ist sehr empfindlich — Handbewegungen in der Nähe beeinflussen die Messung. Im Freien deutlich stabiler als im Innenraum.
 
 ### PID-Regler
 
@@ -522,6 +522,12 @@ Verbindung per PuTTY. **Baudrate: 9600**
 - 90s Aufwärmzeit vor Kalibrierung
 - Rekalibrierung (`r`) direkt vor dem Armen
 - Für präzise Tests: im Freien testen
+
+### Chip ist tatsächlich MS5607, nicht MS5611
+**Bestätigt** im separaten Testprojekt `MS5611-test` (2026-08-07): auf dem verbauten GY-63-Breakout meldet sich zwar ein Sensor unter Adresse 0x77, aber mit der MS5611-Kalibrierformel war der Druck ziemlich genau um Faktor 2 zu niedrig (~505 statt ~1010 mBar). Mit der MS5607-Formel (SENS/OFF-Konstanten um Faktor 2 größer) stimmten die Werte. `Barometer.cpp` rechnet bereits mit der MS5607-Formel (Zeile 119-124, `_C2 << 17` / `_C1 << 16`) — das war also schon richtig gelöst, nur nicht als Erkenntnis festgehalten. Grund vermutlich: viele als "MS5611" verkaufte GY-63-Boards enthalten in Wirklichkeit den baugleichen, günstigeren MS5607-Chip.
+
+### Oversampling-Diskrepanz (Dokumentation vs. Code)
+**Gefunden** bei der Übertragung der Testprojekt-Erkenntnisse (2026-08-07): die Tabelle unter [Barometer Konfiguration](#barometer-konfiguration) nennt `OSR_ULTRA_HIGH`, aber `Barometer.cpp` sendet hartcodiert `CMD_CONV_D1 = 0x44` / `CMD_CONV_D2 = 0x54`. Laut MS5611/MS5607-Datenblatt entspricht 0x44/0x54 OSR=1024 ("STANDARD"), nicht OSR=4096 ("ULTRA_HIGH", das wäre 0x48/0x58). Im Testprojekt hat die Umstellung von niedrigem auf hohes Oversampling die Streuung der Höhenwerte etwa halbiert — es ist also plausibel, dass hier ungenutztes Rauschunterdrückungs-Potenzial liegt. Noch nicht behoben, nur dokumentiert.
 
 ### ICM-20948 nicht gefunden / falsche I2C-Adresse
 **Problem:** `[IMU] ERROR: ICM-20948 nicht gefunden!`, obwohl AD0 an GND liegt.

@@ -22,6 +22,16 @@ Battery battery;
 uint16_t singleThrottle = ESC_MIN_US;
 uint8_t activeMotor = 0;
 
+void printMenu()
+{
+    LOGGER_NOTICE("-----------------------------------------");
+    LOGGER_NOTICE(" EINZELMOTOR TEST");
+    LOGGER_NOTICE(" 1=FL 2=FR 3=BR 4=BL  (Motor waehlen)");
+    LOGGER_NOTICE(" + = schneller   - = langsamer");
+    LOGGER_NOTICE(" s = Stop        h = Hilfe erneut anzeigen");
+    LOGGER_NOTICE("-----------------------------------------");
+}
+
 void setup()
 {
     Serial.begin(115200);
@@ -37,7 +47,7 @@ void setup()
     delay(2000);
 
     LOGGER_NOTICE(">> Modus: EINZELMOTOR TEST");
-    LOGGER_NOTICE("1=FL 2=FR 3=BR 4=BL + - s");
+    printMenu();
     motors.begin();
     battery.begin();
 }
@@ -115,6 +125,10 @@ void loop()
             singleThrottle = ESC_MIN_US;
             motors.stop();
             LOGGER_NOTICE("[MOTOR] STOP");
+            break;
+        case 'h':
+        case 'H':
+            printMenu();
             break;
         }
     }
