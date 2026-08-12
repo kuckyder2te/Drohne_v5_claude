@@ -109,7 +109,7 @@ Ein Nebeneffekt, der bewusst so ist: **`pid -save` und `tune -save` sind im armi
 | [lib/MotorMixer/MotorMixer.cpp](lib/MotorMixer/MotorMixer.cpp) | PWM to ESCs using native RP2040 `hardware/pwm.h` SDK (50 Hz, 20000 wrap, 1000–2000 µs) |
 | [src/control/PIDController.cpp](src/control/PIDController.cpp) | Custom PID — `useOffset=true` (height) adds `THROTTLE_OFFSET_US` so output is absolute throttle clamped to `[ESC_MIN_US, ESC_MAX_US]`; `useOffset=false` (roll/pitch) outputs a pure ±500 correction; integral only accumulates while `enableIntegral(true)`. Zeitbasis ist **`micros()`** (bei 2,5 ms Zyklus wäre `millis()` bis zu 40 % daneben). `computeWithRate()` nimmt den D-Anteil aus einer gemessenen Rate; `setQuiet()` schaltet alle `LOGGER_*` ab — Pflicht für jede Instanz auf Kern 1 |
 | [src/control/SharedState.cpp](src/control/SharedState.cpp) | Datenaustausch zwischen den Kernen: `CoreCmd` (Kern 0 → 1, Mutex + Generationszähler), `CoreTlm` (Kern 1 → 0, Seqlock), `TuneResult`, sowie `g_estop`/`g_beatC0`/`g_beatC1` lock-frei |
-| [src/control/AttitudeLoop.cpp](src/control/AttitudeLoop.cpp) | Der Regelkreis auf Kern 1: IMU, Roll/Pitch-PID, Mixing, Betriebsarten `MODE_FLIGHT`/`MODE_BENCH`/`MODE_TUNE`, Abbruchüberwachung. Loggt nie und wartet nie auf Kern 0 |
+| [src/control/AttitudeLoop.cpp](src/control/AttitudeLoop.cpp) | Der Regelkreis auf Kern 1: IMU, Roll/Pitch-PID, Mixing, Betriebsarten `MODE_FLIGHT`/`MODE_BENCH`/`MODE_TUNE`, Abbruchüberwachung. `axisProject()`/`axisDrive()`/`axisMotors()` bilden die vier Prüfstandsachsen (2 Flugachsen + 2 Motordiagonalen) auf die IMU-Winkel bzw. die Mixer-Eingänge ab — der Mixer selbst kennt nur Roll und Pitch. Loggt nie und wartet nie auf Kern 0 |
 | [src/control/Recorder.cpp](src/control/Recorder.cpp) | Ringpuffer für den Messschrieb: 20 B/Sample × `REC_CAPACITY` (3000) = 60 kB in der `.bss`, bei `REC_DECIMATION` = 2 sind das 15 s @ 200 Hz. Ein Erzeuger (Kern 1), ein Verbraucher (Kern 0), lockfrei — der Verbraucher liest nur nach `isActive() == false` |
 | [src/control/RelayTuner.cpp](src/control/RelayTuner.cpp) | Relay-Feedback-Autotune: Zweipunktregler mit Hysterese, Periodenmessung über die steigenden Flanken, Ku/Tu-Statistik. Läuft auf Kern 1, weil die Umschaltzeitpunkte µs-Auflösung brauchen |
 | [lib/IMU/IMU.cpp](lib/IMU/IMU.cpp) | ICM-20948 9-DoF via the `wollewald/ICM20948_WE` library at I2C address **0x69** (board-specific quirk — datasheet implies 0x68 for AD0=GND); complementary filter fusing gyro integration with accel-derived roll/pitch; I2C bus recovery via 9 SCL pulses in `IMU::begin(true)` before `Wire.begin()`. **DLPF: Gyro `DLPF_3` (51,2 Hz), Accel `DLPF_4` (23,9 Hz)** — vorher `DLPF_6` (5,7 Hz) auf beiden, was >30 ms Gruppenlaufzeit bedeutete. `alpha` wird je Zyklus als `tau/(tau+dt)` berechnet (`IMU_TAU_S`) statt fest verdrahtet; Gyro-Bereich 500 dps wegen der Relais-Anregung |
@@ -135,8 +135,8 @@ The CLI is the firmware's only input path. It replaced `CommChannel`/`InputHandl
 | `setHeight <cm>` / `getHeight` | clamped to `[THROTTLE_MIN_CM, MAX_HEIGHT_CM]` |
 | `getArmed` | flight state |
 | `stats [-hang]` | Zustand von Kern 1 als JSON; `-hang` ist der Watchdog-Nachweis |
-| `bench [...]` | Prüfstandsbetrieb auf einer Achse + Messschrieb — siehe unten |
-| `tune [...]` | Relay-Feedback-Autotune — siehe unten |
+| `bench [...]` | Prüfstandsbetrieb auf einer Achse (`-roll`/`-pitch`/`-flbr`/`-frbl`) + Messschrieb — siehe unten |
+| `tune [...]` | Relay-Feedback-Autotune, gleiche Achswahl — siehe unten |
 | `help` | command list + the immediate-key chapter — see below |
 
 **`pid`** replaced nine `setK*Height`/`Roll`/`Pitch` setters plus `getPid`, `save` and `reset` with one command. `pid -h` prints its own option help.
@@ -174,16 +174,37 @@ Four things about this module are load-bearing and easy to break:
 
 ### Prüfstand (`bench`) und Autotune (`tune`)
 
-Beide arbeiten auf einer **1-Achsen-Wippe**: das Gerät ist so eingespannt, dass es nur um Roll *oder* Pitch kippen kann. Der Höhenregler ist dabei komplett abgeschaltet und die Throttle fest — es geht ausschließlich um die Lageregelung.
+Beide arbeiten auf einer **1-Achsen-Wippe**: das Gerät ist so eingespannt, dass es nur um *eine* Achse kippen kann. Der Höhenregler ist dabei komplett abgeschaltet und die Throttle fest — es geht ausschließlich um die Lageregelung.
 
 ```
 bench -roll -throttle 1300 -max 1600 -go     Pruefstand starten (2x -go bestaetigen)
+bench -flbr -go                               dasselbe auf der Motordiagonalen FL/BR
 bench -dump [-n 500]                          Messschrieb als CSV (nur disarmt)
 tune -roll -h 60 -eps 1.0 -go                 Autotune starten
+tune -flbr -h 60 -go                          Autotune auf der Motordiagonalen
 tune -show                                    Ergebnis ansehen, ohne zu uebernehmen
 tune -apply                                   Kp und Kd uebernehmen
 tune -save                                    uebernehmen und ins EEPROM (nur disarmt)
 ```
+
+#### Vier Achsen: zwei Flugachsen, zwei Motordiagonalen
+
+`-roll`/`-pitch` sind die Flugachsen. `-flbr`/`-frbl` sind die **physischen Motorachsen** des X-Rahmens — gedacht für den Fall, dass sich die Drohne mechanisch leichter auf einer Motordiagonalen einspannen lässt als auf einer Flugachse. Benannt sind sie nach den beiden Motoren, die die Wippe *antreiben*; die anderen beiden liegen auf der Wippenstange und bleiben exakt auf der Basis-Throttle stehen:
+
+| Option | Wippenstange auf | angetrieben von | Winkel |
+|---|---|---|---|
+| `-roll` | Längsachse | FL+BL gegen FR+BR | `roll` |
+| `-pitch` | Querachse | FL+FR gegen BL+BR | `pitch` |
+| `-flbr` | Diagonale FR–BL | FL gegen BR | `(pitch − roll)·0,7071` |
+| `-frbl` | Diagonale FL–BR | FR gegen BL | `(pitch + roll)·0,7071` |
+
+Drei Dinge daran sind tragend:
+
+- **Der `MotorMixer` bleibt unverändert.** Eine Diagonalkorrektur `c` wird in `attitude::axisDrive()` als `rollOut = ∓c/2, pitchOut = +c/2` eingespeist; die vorhandene X-Mischung liefert daraus `FL = t+c`, `BR = t−c` und lässt `FR` und `BL` rechnerisch exakt auf `t`. Es gibt also keinen Sonderpfad im Mixer und keine zweite Mischformel, die auseinanderlaufen könnte. Die Halbierung ist kein Fudge-Faktor: sie hält `c` in derselben Einheit wie bei Roll/Pitch (Abweichung *eines* Motors in µs), damit `h` auf allen vier Achsen dasselbe bedeutet.
+- **Der Faktor 0,7071 = 1/√2 zwischen Diagonale und Flugachse** (`DIAG_AXIS_GAIN` in `config.h`, Herleitung dort). Er kommt allein aus dem Hebelarm: auf der Diagonalen wirken nur 2 Motoren, dafür mit Hebel `a·√2` statt `a`, also `2√2` statt `4` Einheiten Moment. Das Trägheitsmoment ist beim symmetrischen X um beide Diagonalen *gleich* dem um Roll/Pitch (jeweils `4ma²`), fällt also heraus. **Bei gestrecktem Rahmen (Deadcat) gilt das nicht** — dann stimmen weder die 45°-Projektion noch die Trägheitsgleichheit.
+- **Der Faktor wirkt in beide Richtungen, damit der Kreis sich schließt.** `tune -flbr` → `-apply` schreibt `Kp·0,7071` in **roll und pitch zugleich** (die Diagonale liegt symmetrisch zu beiden — das ist der eigentliche Gewinn: ein Lauf statt zwei). Umgekehrt fährt `bench -flbr` den Regler `s_pidDiag`, der die Roll-Beiwerte *durch* 0,7071 geteilt bekommt. Dadurch zeigt die Wippe dasselbe Regelverhalten wie später der Rollregler im Flug, ohne dass jemand von Hand umrechnet. Wer eine der beiden Richtungen entfernt, bricht den Rundlauf.
+
+`tune -show` gibt für eine Diagonale beides aus: `Ku`/`Kp`/`Ki`/`Kd` gelten für die Diagonale, die zusätzlichen `KuAxis`/`KpAxis`/`KiAxis`/`KdAxis` sind die umgerechneten Werte für roll+pitch — und **nur diese** schreibt `-apply`.
 
 **Wie `tune` misst.** Statt eines PID-Reglers wirkt ein Zweipunktregler mit Hysterese auf die Achse. Der treibt die Strecke von selbst in eine Dauerschwingung, und zwar genau bei der kritischen Frequenz, an der ein P-Regler an der Stabilitätsgrenze stünde. Der Vorteil gegenüber „Kp erhöhen bis es schwingt": die Amplitude bleibt durch `h` begrenzt und wächst nicht unkontrolliert. Aus der Schwingung folgen `Tu` (Periodendauer, aus den steigenden Flanken) und `Ku = 4h / (π·√(a²−ε²))`.
 
@@ -210,14 +231,15 @@ Vier Entwurfsentscheidungen, die leicht falsch „korrigiert" werden:
 
 Abbrüche werden auf Kern 1 jeden Zyklus geprüft (Winkelgrenze in 3 Zyklen in Folge, Timeout, `g_estop`, Kern-0-Herzschlag, Disarm, IMU-Fehler, und bei `tune` zusätzlich „keine Umschaltung > `TUNE_NOSWITCH_MS`" = keine Schwingung). Der Code landet in `CoreTlm::abortCode`, Kern 0 übersetzt ihn in `abortText()` — Kern 1 darf nicht loggen.
 
-**Reihenfolge der Inbetriebnahme** (die ersten beiden Schritte ohne Propeller):
+**Reihenfolge der Inbetriebnahme** (die ersten beiden Schritte ohne Propeller). `<achse>` steht für die Achse, auf der die Wippe tatsächlich eingespannt ist — `-roll`, `-pitch`, `-flbr` oder `-frbl`; in **allen** Schritten dieselbe:
 
 1. `stats` → `loopHz` muss ~400 sein, `overruns` = 0.
 2. `stats -hang` → muss innerhalb 150 ms `[SAFETY] Kern 1 antwortet nicht` auslösen. **Ohne diesen bestandenen Test darf kein Propeller montiert werden.**
-3. `tune -roll -h 60 -go` ohne Propeller → muss nach 3 s mit `ABORT_NOSWITCH` enden (es kann keine Schwingung entstehen). Prüft den Abbruchpfad.
-4. Mit Propellern, eingespannt: `arm`, `tune -roll -go`, danach `bench -dump`. Im CSV muss `out_us` eine saubere Rechteckschwingung zwischen −h und +h zeigen und `angle_deg` eine gleichmäßige Schwingung. `spread` < 0,1.
-5. **Validierung der Methode:** `pid -roll -Kp <Ku> -Ki 0 -Kd 0` setzen und `bench -go`. Per Definition von Ku muss die Achse jetzt *grenzstabil* schwingen — schwingt sie auf oder klingt sie ab, ist Ku falsch und alle abgeleiteten Werte sind wertlos.
-6. Erst danach `tune -apply`.
+3. `tune <achse> -h 60 -go` ohne Propeller → muss nach 3 s mit `ABORT_NOSWITCH` enden (es kann keine Schwingung entstehen). Prüft den Abbruchpfad.
+4. **Vorzeichenprobe der Diagonalprojektion, ohne Propeller** (entfällt bei `-roll`/`-pitch`). Gerät von Hand so kippen, dass **FL nach oben** geht, und dabei `stats` lesen. `roll` und `pitch` müssen sich in **entgegengesetzte** Richtungen bewegen — dann stimmt `-flbr`. Bewegen sie sich gleichsinnig, ist für diesen Rahmen `-frbl` die FL/BR-Achse und die beiden Optionen sind vertauscht. Das ist kein Schönheitsfehler: `axisProject()` und `axisDrive()` müssen dasselbe Vorzeichen haben, sonst wird aus der Gegen- eine **Mitkopplung** und die Achse läuft beim ersten `bench` weg. Danach zusätzlich `bench <achse> -throttle 1150 -max 1250 -go` fahren und im `bench -dump`-CSV prüfen, dass die beiden Motoren *auf* der Wippenstange unbewegt auf der Basis-Throttle stehen.
+5. Mit Propellern, eingespannt: `arm`, `tune <achse> -go`, danach `bench -dump`. Im CSV muss `out_us` eine saubere Rechteckschwingung zwischen −h und +h zeigen und `angle_deg` eine gleichmäßige Schwingung. `spread` < 0,1.
+6. **Validierung der Methode:** `pid -roll -Kp <Ku> -Ki 0 -Kd 0` setzen und `bench <achse> -go`. Per Definition von Ku muss die Achse jetzt *grenzstabil* schwingen — schwingt sie auf oder klingt sie ab, ist Ku falsch und alle abgeleiteten Werte sind wertlos. **Auf einer Diagonalen ist hier `KuAxis` einzutragen, nicht `Ku`** — `bench` rechnet die Roll-Beiwerte selbst wieder auf die Diagonale hoch, ein direkt eingetragenes `Ku` wäre um √2 zu groß.
+7. Erst danach `tune -apply`.
 
 Der Messschrieb geht über `shell.print` auf den CLI-Kanal, also aktuell USB @115200 (≈ 14 s für den vollen Puffer). Über BT @9600 wären es ~156 s — deshalb ist der Dump nur disarmiert erlaubt und zählt in der Druckschleife `g_beatC0` weiter, sonst liefe der Herzschlag ab.
 

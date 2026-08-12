@@ -40,8 +40,26 @@ enum : uint16_t {
     ABORT_DONE     = 8    // Autotune regulaer fertig
 };
 
+// Achsen fuer BENCH/TUNE. Roll und Pitch sind die Flugachsen; die beiden
+// Diagonalen sind die physischen Motorachsen des X-Rahmens - benannt nach den
+// beiden Motoren, die die Wippe antreiben, waehrend die anderen beiden auf der
+// Wippenstange liegen und unberuehrt bleiben.
+//
+//   AXIS_FL_BR   Stange auf FR-BL, angetrieben von FL gegen BR
+//   AXIS_FR_BL   Stange auf FL-BR, angetrieben von FR gegen BL
+//
+// Der Mixer braucht dafuer keine Sonderbehandlung: eine Korrektur c, als
+// rollOut=-c/2 und pitchOut=+c/2 eingespeist, ergibt FL=t+c, BR=t-c und laesst
+// FR und BL exakt auf t stehen (analog mit rollOut=+c/2 fuer die andere
+// Diagonale). Die Halbierung haelt c in derselben Einheit wie bei Roll/Pitch,
+// naemlich der tatsaechlichen Abweichung eines Motors in us - nur so bedeutet
+// die Relaisamplitude 'h' auf allen vier Achsen dasselbe.
 constexpr uint8_t AXIS_ROLL  = 0;
 constexpr uint8_t AXIS_PITCH = 1;
+constexpr uint8_t AXIS_FL_BR = 2;
+constexpr uint8_t AXIS_FR_BL = 3;
+
+inline bool axisIsDiagonal(uint8_t ax) { return ax == AXIS_FL_BR || ax == AXIS_FR_BL; }
 
 struct BenchCfg {
     float    limitDeg  = BENCH_LIMIT_DEG;

@@ -22,6 +22,15 @@ namespace {
     PIDController s_pidRoll {PID_KP_ROLL,  PID_KI_ROLL,  PID_KD_ROLL,  false};
     PIDController s_pidPitch{PID_KP_PITCH, PID_KI_PITCH, PID_KD_PITCH, false};
 
+    // Nur fuer den Diagonal-Pruefstand. Faehrt die Roll-Beiwerte durch
+    // DIAG_AXIS_GAIN geteilt, damit die Wippe physikalisch dasselbe
+    // Regelverhalten zeigt wie der Rollregler im Flug - auf der Diagonalen
+    // wirken nur zwei Motoren, dafuer mit groesserem Hebel (Herleitung in
+    // config.h). Ohne diese Hochrechnung waere die Wippe um Faktor sqrt(2)
+    // zu weich eingestellt und der Prueflauf wuerde etwas anderes zeigen als
+    // das, was spaeter fliegt.
+    PIDController s_pidDiag {PID_KP_ROLL,  PID_KI_ROLL,  PID_KD_ROLL,  false};
+
     RelayTuner s_tuner;
 
     CoreCmd  s_cmd;              // letzte bekannte Fassung
@@ -41,10 +50,61 @@ namespace {
     uint32_t s_loopHz     = 0;
     uint8_t  s_angleTrips = 0;
 
-    void applyCoeffs(PIDController &p, const PidCoeffs &c) {
-        if (p.getKp() != c.kp) p.setKp(c.kp);
-        if (p.getKi() != c.ki) p.setKi(c.ki);
-        if (p.getKd() != c.kd) p.setKd(c.kd);
+    void applyCoeffs(PIDController &p, const PidCoeffs &c, float scale = 1.0f) {
+        if (p.getKp() != c.kp * scale) p.setKp(c.kp * scale);
+        if (p.getKi() != c.ki * scale) p.setKi(c.ki * scale);
+        if (p.getKd() != c.kd * scale) p.setKd(c.kd * scale);
+    }
+
+    // ── Achsprojektion ────────────────────────────────────────────────────
+    // Die IMU misst Roll und Pitch. Eine Motordiagonale liegt beim X-Rahmen
+    // unter 45 Grad dazu, ihr Kippwinkel ist also die auf die Achsrichtung
+    // projizierte Summe bzw. Differenz. Der Faktor 1/sqrt(2) macht daraus
+    // wieder einen echten Winkel in Grad - ohne ihn waere der Wert um sqrt(2)
+    // zu gross und alle daraus abgeleiteten Beiwerte entsprechend daneben.
+    void axisProject(uint8_t ax, float roll, float pitch, float gr, float gp,
+                     float &angle, float &rate) {
+        switch (ax) {
+            case AXIS_ROLL:  angle = roll;  rate = gr; break;
+            case AXIS_PITCH: angle = pitch; rate = gp; break;
+            // positiv = FL oben / BR unten
+            case AXIS_FL_BR: angle = (pitch - roll) * DIAG_AXIS_GAIN;
+                             rate  = (gp    - gr)   * DIAG_AXIS_GAIN; break;
+            // positiv = FR oben / BL unten
+            default:         angle = (pitch + roll) * DIAG_AXIS_GAIN;
+                             rate  = (gp    + gr)   * DIAG_AXIS_GAIN; break;
+        }
+    }
+
+    // Legt die Korrektur so auf die Mixer-Eingaenge um, dass genau die beiden
+    // Motoren der Achse gegenlaeufig laufen. Siehe SharedState.h.
+    void axisDrive(uint8_t ax, float corr, float &rollOut, float &pitchOut) {
+        switch (ax) {
+            case AXIS_ROLL:  rollOut  = corr; break;
+            case AXIS_PITCH: pitchOut = corr; break;
+            case AXIS_FL_BR: rollOut = -corr * 0.5f; pitchOut = corr * 0.5f; break;
+            default:         rollOut =  corr * 0.5f; pitchOut = corr * 0.5f; break;
+        }
+    }
+
+    // Die beiden Motoren, die auf dieser Achse gegeneinander arbeiten -
+    // Spaltenauswahl fuer den Messschrieb. Indizes wie MotorMixer::getMotorUs:
+    // 0=FL, 1=FR, 2=BL, 3=BR.
+    void axisMotors(uint8_t ax, uint8_t &a, uint8_t &b) {
+        switch (ax) {
+            case AXIS_ROLL:  a = 0; b = 1; break;   // FL gegen FR
+            case AXIS_PITCH: a = 0; b = 2; break;   // FL gegen BL
+            case AXIS_FL_BR: a = 0; b = 3; break;   // FL gegen BR
+            default:         a = 1; b = 2; break;   // FR gegen BL
+        }
+    }
+
+    PIDController &axisPid(uint8_t ax) {
+        switch (ax) {
+            case AXIS_ROLL:  return s_pidRoll;
+            case AXIS_PITCH: return s_pidPitch;
+            default:         return s_pidDiag;
+        }
     }
 
     // Beendet einen Bench-/Tune-Lauf und legt die Motoren still.
@@ -62,6 +122,7 @@ namespace {
         s_angleTrips = 0;
         s_pidRoll.reset();
         s_pidPitch.reset();
+        s_pidDiag.reset();
         if (s_motors) s_motors->setMaxUs((uint16_t)s_cmd.motorMaxUs);
 
         if (s_cmd.mode == MODE_TUNE) {
@@ -83,9 +144,11 @@ void begin(IMU &imu, MotorMixer &motors) {
     // wuerde eine gleichzeitig laufende von Kern 0 zerstoeren.
     s_pidRoll.setQuiet(true);
     s_pidPitch.setQuiet(true);
+    s_pidDiag.setQuiet(true);
 
     s_pidRoll.reset();
     s_pidPitch.reset();
+    s_pidDiag.reset();
     recorder::begin();
 
     s_nextUs = micros();
@@ -126,8 +189,10 @@ void step() {
     if (cmdFetch(s_cmd)) {
         applyCoeffs(s_pidRoll,  s_cmd.roll);
         applyCoeffs(s_pidPitch, s_cmd.pitch);
+        applyCoeffs(s_pidDiag,  s_cmd.roll, 1.0f / DIAG_AXIS_GAIN);
         s_pidRoll.enableIntegral(s_cmd.integralOn);
         s_pidPitch.enableIntegral(s_cmd.integralOn);
+        s_pidDiag.enableIntegral(s_cmd.integralOn);
 
         if (s_cmd.runId != s_lastRunId) {
             s_lastRunId = s_cmd.runId;
@@ -184,9 +249,12 @@ void step() {
     }
     else if (s_running) {
         // ── Pruefstand / Autotune: genau EINE Achse ────────────────────
-        bool  isRoll = (s_cmd.axis == AXIS_ROLL);
-        float angle  = isRoll ? roll : pitch;
-        float rate   = isRoll ? gr   : gp;
+        // Achse ist entweder eine Flugachse (roll/pitch) oder eine
+        // Motordiagonale; beides laeuft ueber dieselbe Projektion.
+        const uint8_t ax = s_cmd.axis;
+        float angle, rate;
+        axisProject(ax, roll, pitch, gr, gp, angle, rate);
+
         float limit  = (s_cmd.mode == MODE_TUNE) ? s_cmd.tune.limitDeg
                                                  : s_cmd.bench.limitDeg;
         uint32_t tmo = (s_cmd.mode == MODE_TUNE) ? s_cmd.tune.timeoutMs
@@ -204,31 +272,37 @@ void step() {
             thr = (uint16_t)s_cmd.throttleUs;
             float corr;
 
+            PIDController &p = axisPid(ax);
+
             if (s_cmd.mode == MODE_TUNE) {
                 corr = s_tuner.step(nowUs, angle);
                 if (s_tuner.isDone()) {
                     TuneResult r = s_tuner.result();
-                    r.axis = s_cmd.axis;
+                    r.axis = ax;
                     resultWrite(r);
                     finish(s_tuner.abortCode());
                     corr = 0.0f;
                 }
             } else {
-                corr = isRoll
-                     ? s_pidRoll.computeWithRate(s_cmd.targetRoll,   angle, rate, dt)
-                     : s_pidPitch.computeWithRate(s_cmd.targetPitch, angle, rate, dt);
+                // Sollwert ist auf jeder Achse die Waagerechte. Fuer die
+                // Diagonalen gibt es keinen eigenen Sollwert: die Wippe soll
+                // dort ebenso ausgeglichen stehen.
+                float target = (ax == AXIS_PITCH) ? s_cmd.targetPitch
+                                                  : s_cmd.targetRoll;
+                corr = p.computeWithRate(target, angle, rate, dt);
             }
 
-            if (isRoll) rollOut = corr; else pitchOut = corr;
+            axisDrive(ax, corr, rollOut, pitchOut);
 
             if (s_motors && s_running)
                 s_motors->mix(thr, rollOut, pitchOut, 0.0f);
 
-            // Aufzeichnen: fuer Roll treibt die Korrektur FL(0) gegen FR(1)
-            // auseinander, fuer Pitch FL(0) gegen BL(2).
-            PIDController &p = isRoll ? s_pidRoll : s_pidPitch;
-            uint16_t m0 = s_motors ? s_motors->getMotorUs(0) : 0;
-            uint16_t m1 = s_motors ? s_motors->getMotorUs(isRoll ? 1 : 2) : 0;
+            // Aufzeichnen: die beiden Motoren, die auf dieser Achse
+            // gegeneinander arbeiten.
+            uint8_t iA, iB;
+            axisMotors(ax, iA, iB);
+            uint16_t m0 = s_motors ? s_motors->getMotorUs(iA) : 0;
+            uint16_t m1 = s_motors ? s_motors->getMotorUs(iB) : 0;
             recorder::push(nowUs, angle, rate, corr,
                            s_cmd.mode == MODE_TUNE ? 0.0f : p.getP(),
                            s_cmd.mode == MODE_TUNE ? 0.0f : p.getI(),
@@ -262,9 +336,14 @@ void step() {
     t.gyroPitch = gp;
     t.rollOut   = rollOut;
     t.pitchOut  = pitchOut;
-    t.rollP     = s_pidRoll.getP();
-    t.rollI     = s_pidRoll.getI();
-    t.rollD     = s_pidRoll.getD();
+    // Einzelbeitraege des Reglers, der gerade arbeitet: am Pruefstand der
+    // Regler der aktiven Achse, sonst Roll. Vorher stand hier immer s_pidRoll,
+    // was auf einem Pitch-Prueflauf die falsche Achse zeigte.
+    PIDController &tp = (s_running && s_cmd.mode == MODE_BENCH)
+                      ? axisPid(s_cmd.axis) : s_pidRoll;
+    t.rollP     = tp.getP();
+    t.rollI     = tp.getI();
+    t.rollD     = tp.getD();
     for (uint8_t i = 0; i < 4; ++i) t.m[i] = s_motors ? s_motors->getMotorUs(i) : 0;
     t.loopHz    = s_loopHz;
     t.maxLoopUs = s_maxHeld;

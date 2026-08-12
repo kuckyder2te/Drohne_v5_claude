@@ -197,6 +197,12 @@ namespace {
         shell.println(F("  5. 'tune -show', bei Bedarf 'tune -apply'"));
         shell.println(F("  6. 'bench -dump' liefert den Messschrieb als CSV"));
         shell.println();
+        shell.println(F("Achse in Schritt 4 nach Einspannung waehlen:"));
+        shell.println(F("  -roll -pitch  Wippe auf einer Flugachse"));
+        shell.println(F("  -flbr -frbl   Wippe auf einer Motordiagonalen; -flbr"));
+        shell.println(F("                treibt FL gegen BR, -frbl FR gegen BL."));
+        shell.println(F("                Ein Diagonal-Lauf tunt roll und pitch."));
+        shell.println();
         shell.println(F("Optionen einzelner Kommandos: 'pid -h', 'bench -h', 'tune -help'"));
         return 0;
     }
@@ -444,11 +450,43 @@ namespace {
 
     // ── Pruefstand (1-Achsen-Wippe) ────────────────────────────────────
 
+    const __FlashStringHelper *runAxisName(uint8_t ax) {
+        switch (ax) {
+            case shared::AXIS_ROLL:  return F("roll");
+            case shared::AXIS_PITCH: return F("pitch");
+            case shared::AXIS_FL_BR: return F("fl/br");
+            default:                 return F("fr/bl");
+        }
+    }
+
+    // Sagt an, wie die Wippe fuer diese Achse eingespannt sein muss. Ein
+    // Prueflauf auf der falsch eingespannten Achse waere sofort ein
+    // ABORT_ANGLE - besser, es steht vor dem Start da.
+    void printAxisRig(uint8_t ax) {
+        shell.print(F("      Wippenstange auf "));
+        switch (ax) {
+            case shared::AXIS_ROLL:
+                shell.println(F("der Laengsachse, es treibt FL+BL gegen FR+BR")); break;
+            case shared::AXIS_PITCH:
+                shell.println(F("der Querachse, es treibt FL+FR gegen BL+BR")); break;
+            case shared::AXIS_FL_BR:
+                shell.println(F("FR-BL, es treibt FL gegen BR")); break;
+            default:
+                shell.println(F("FL-BR, es treibt FR gegen BL")); break;
+        }
+    }
+
     void benchHelp() {
         shell.println(F("bench - Pruefstandsbetrieb auf genau EINER Achse"));
-        shell.println(F("usage: bench [-roll|-pitch] [-throttle us] [-max us]"));
-        shell.println(F("             [-limit deg] [-time s] [-go|-stop|-dump]"));
-        shell.println(F("  -roll/-pitch  aktive Achse, die andere bleibt bei 0"));
+        shell.println(F("usage: bench [-roll|-pitch|-flbr|-frbl] [-throttle us]"));
+        shell.println(F("             [-max us] [-limit deg] [-time s]"));
+        shell.println(F("             [-go|-stop|-dump]"));
+        shell.println(F("  -roll/-pitch  Flugachse, die andere bleibt bei 0"));
+        shell.println(F("  -flbr/-frbl   Motordiagonale (physische Motorachse):"));
+        shell.println(F("                -flbr = Stange auf FR-BL, FL treibt gegen BR"));
+        shell.println(F("                -frbl = Stange auf FL-BR, FR treibt gegen BL"));
+        shell.println(F("                Die beiden Motoren auf der Stange bleiben"));
+        shell.println(F("                dabei exakt auf der Basis-Throttle stehen."));
         shell.println(F("  -throttle us  feste Basis-Throttle (Vorgabe 1300)"));
         shell.println(F("  -max us       Obergrenze aller Motoren (Vorgabe 1600)"));
         shell.println(F("  -limit deg    Abbruch ab diesem Winkel (Vorgabe 25)"));
@@ -458,6 +496,10 @@ namespace {
         shell.println(F("  -dump [-n k]  Aufzeichnung als CSV (nur disarmt)"));
         shell.println(F("Der Hoehenregler ist hier abgeschaltet, die Throttle ist"));
         shell.println(F("fest. Aufgezeichnet wird ab -go automatisch."));
+        shell.println(F("Auf einer Diagonalen faehrt der Regler die roll-Beiwerte"));
+        shell.println(F("durch 0.707 geteilt - dort wirken nur zwei Motoren, dafuer"));
+        shell.println(F("mit groesserem Hebel. So verhaelt sich die Wippe wie der"));
+        shell.println(F("Rollregler im Flug, ohne dass du umrechnen musst."));
         shell.println(F("Vor dem ersten Lauf mit Propeller: 'stats -hang' machen."));
     }
 
@@ -500,6 +542,8 @@ namespace {
         handled = true;
         if      (optIs(a, "-roll"))  { o.axis = shared::AXIS_ROLL;  o.axisSet = true; return true; }
         else if (optIs(a, "-pitch")) { o.axis = shared::AXIS_PITCH; o.axisSet = true; return true; }
+        else if (optIs(a, "-flbr"))  { o.axis = shared::AXIS_FL_BR; o.axisSet = true; return true; }
+        else if (optIs(a, "-frbl"))  { o.axis = shared::AXIS_FR_BL; o.axisSet = true; return true; }
         else if (optIs(a, "-go"))    { o.go   = true; return true; }
         else if (optIs(a, "-stop"))  { o.stop = true; return true; }
         else if (optIs(a, "-dump"))  { o.dump = true; return true; }
@@ -595,7 +639,9 @@ namespace {
         if (o.go) {
             if (!validateRun(o)) return -1;
             if (!o.axisSet) {
-                shell.println(F("bench: erst Achse waehlen (-roll oder -pitch)"));
+                shell.println(F("bench: erst Achse waehlen"));
+                shell.println(F("       Flugachse:      -roll  -pitch"));
+                shell.println(F("       Motordiagonale: -flbr  -frbl"));
                 return -1;
             }
             if (!flightController.isArmed()) {
@@ -610,16 +656,17 @@ namespace {
             flightController.startBench(o.axis, o.throttle, o.maxUs, cfg);
 
             shell.print(F("[CLI] Pruefstand laeuft: "));
-            shell.print(o.axis == shared::AXIS_ROLL ? F("roll") : F("pitch"));
+            shell.print(runAxisName(o.axis));
             shell.print(F(", throttle=")); shell.print((int)o.throttle);
             shell.print(F(", max="));      shell.print((int)o.maxUs);
             shell.print(F(", limit="));    shell.print(o.limitDeg, 1);
             shell.println(F(" - 'd' bricht sofort ab"));
+            printAxisRig(o.axis);
             return 0;
         }
 
         shell.print(F("bench: axis="));
-        shell.print(o.axis == shared::AXIS_ROLL ? F("roll") : F("pitch"));
+        shell.print(runAxisName(o.axis));
         shell.print(F(" samples=")); shell.print(recorder::count());
         shell.print('/');            shell.println(recorder::capacity());
         return 0;
@@ -652,9 +699,15 @@ namespace {
 
     void tuneHelp() {
         shell.println(F("tune - PID-Werte automatisch ermitteln (Relay-Feedback)"));
-        shell.println(F("usage: tune [-roll|-pitch] [-h us] [-eps deg] [-throttle us]"));
-        shell.println(F("            [-cycles n] [-rule name] [-go|-stop|-show]"));
-        shell.println(F("            [-apply] [-ki] [-save]"));
+        shell.println(F("usage: tune [-roll|-pitch|-flbr|-frbl] [-h us] [-eps deg]"));
+        shell.println(F("            [-throttle us] [-cycles n] [-rule name]"));
+        shell.println(F("            [-go|-stop|-show] [-apply] [-ki] [-save]"));
+        shell.println(F("  -flbr/-frbl Motordiagonale statt Flugachse:"));
+        shell.println(F("              -flbr = Stange auf FR-BL, FL treibt gegen BR"));
+        shell.println(F("              -frbl = Stange auf FL-BR, FR treibt gegen BL"));
+        shell.println(F("              Die Diagonale liegt symmetrisch zu beiden"));
+        shell.println(F("              Flugachsen, ein Lauf tunt daher roll UND"));
+        shell.println(F("              pitch. -apply rechnet mit 0.707 um."));
         shell.println(F("  -h us       Relais-Amplitude (Vorgabe 60)"));
         shell.println(F("  -eps deg    Hysterese (Vorgabe 1.0)"));
         shell.println(F("  -cycles n   auszuwertende Perioden (Vorgabe 6)"));
@@ -679,18 +732,28 @@ namespace {
         return (root > 0.0f) ? (4.0f * r.h) / (PI * sqrtf(root)) : 0.0f;
     }
 
+    // Beiwerte aus Ku/Tu nach der gewaehlten Regel. Bewusst eine einzige
+    // Stelle: Anzeige und Uebernahme rechneten das frueher getrennt, und zwei
+    // Kopien derselben Formel driften irgendwann auseinander.
+    void computeCoeffs(const shared::TuneResult &r, const TuneRule &rule,
+                       float &ku, float &kp, float &ki, float &kd) {
+        ku = computeKu(r);
+        kp = rule.kp * ku;
+        float ti = rule.ti * r.tu;
+        float td = rule.td * r.tu;
+        ki = (ti > 0.0f) ? kp / ti : 0.0f;
+        kd = kp * td;
+    }
+
     // Rechnet aus Ku/Tu die Koeffizienten und gibt alles als JSON aus.
     void printTuneResult(const shared::TuneResult &r, const TuneRule &rule,
                          bool applied, bool withKi) {
-        float ku = computeKu(r);
-        float kp = rule.kp * ku;
-        float ti = rule.ti * r.tu;
-        float td = rule.td * r.tu;
-        float ki = (ti > 0.0f) ? kp / ti : 0.0f;
-        float kd = kp * td;
+        float ku, kp, ki, kd;
+        computeCoeffs(r, rule, ku, kp, ki, kd);
+        const bool diag = shared::axisIsDiagonal(r.axis);
 
         shell.print(F("{\"axis\":\""));
-        shell.print(r.axis == shared::AXIS_ROLL ? F("roll") : F("pitch"));
+        shell.print(runAxisName(r.axis));
         shell.print(F("\",\"h\":"));    shell.print(r.h, 1);
         shell.print(F(",\"eps\":"));    shell.print(r.eps, 2);
         shell.print(F(",\"a\":"));      shell.print(r.amp, 3);
@@ -702,12 +765,26 @@ namespace {
         shell.print(F("\",\"Kp\":"));   shell.print(kp, 4);
         shell.print(F(",\"Ki\":"));     shell.print(ki, 4);
         shell.print(F(",\"Kd\":"));     shell.print(kd, 4);
+        if (diag) {
+            // Auf der Diagonalen gemessen, gebraucht werden sie auf roll/pitch.
+            shell.print(F(",\"conv\":"));   shell.print(DIAG_AXIS_GAIN, 4);
+            shell.print(F(",\"KuAxis\":")); shell.print(ku * DIAG_AXIS_GAIN, 3);
+            shell.print(F(",\"KpAxis\":")); shell.print(kp * DIAG_AXIS_GAIN, 4);
+            shell.print(F(",\"KiAxis\":")); shell.print(ki * DIAG_AXIS_GAIN, 4);
+            shell.print(F(",\"KdAxis\":")); shell.print(kd * DIAG_AXIS_GAIN, 4);
+            shell.print(F(",\"target\":\"roll+pitch\""));
+        }
         shell.print(F(",\"applied\":"));
         if (!applied) shell.print(F("[]"));
         else if (withKi) shell.print(F("[\"Kp\",\"Ki\",\"Kd\"]"));
         else shell.print(F("[\"Kp\",\"Kd\"]"));
         shell.println('}');
 
+        if (diag) {
+            shell.println(F("Ku/Kp/Ki/Kd gelten fuer die Diagonale. Die *Axis-Werte"));
+            shell.println(F("sind daraus umgerechnet und gelten fuer roll UND pitch;"));
+            shell.println(F("nur sie werden von -apply geschrieben."));
+        }
         if (r.spread > 0.15f)
             shell.println(F("WARNUNG: Perioden streuen >15% - Ergebnis unsicher"));
     }
@@ -792,12 +869,20 @@ namespace {
                     return -1;
                 }
 
-                float ku = computeKu(r);
-                float kp = rule->kp * ku;
-                float ti = rule->ti * r.tu;
-                float td = rule->td * r.tu;
-                float ki = (ti > 0.0f) ? kp / ti : 0.0f;
-                float kd = kp * td;
+                float ku, kp, ki, kd;
+                computeCoeffs(r, *rule, ku, kp, ki, kd);
+
+                // Auf einer Diagonalen wurde eine physische Motorachse
+                // vermessen; geflogen wird auf roll/pitch. Der Faktor bringt
+                // beides zusammen - Herleitung in config.h. Ab hier sind
+                // kp/ki/kd durchgehend Flugachsen-Werte, also genau das, was
+                // gleich auch geschrieben wird.
+                const bool diag = shared::axisIsDiagonal(r.axis);
+                if (diag) {
+                    kp *= DIAG_AXIS_GAIN;
+                    ki *= DIAG_AXIS_GAIN;
+                    kd *= DIAG_AXIS_GAIN;
+                }
 
                 // Nicht still auf 255 klemmen lassen: _clampCoeff ist als
                 // Tippfehlerschutz gedacht, nicht als Ventil fuer eine
@@ -810,12 +895,24 @@ namespace {
                     return -1;
                 }
 
-                PIDController &p = (r.axis == shared::AXIS_ROLL)
-                                 ? flightController.getPidRoll()
-                                 : flightController.getPidPitch();
-                p.setKp(kp);
-                p.setKd(kd);
-                if (doKi) p.setKi(ki);
+                // Die Diagonale liegt symmetrisch zu beiden Flugachsen, ein
+                // Lauf liefert daher roll und pitch zugleich.
+                PIDController *targets[2] = {nullptr, nullptr};
+                if (diag) {
+                    targets[0] = &flightController.getPidRoll();
+                    targets[1] = &flightController.getPidPitch();
+                } else if (r.axis == shared::AXIS_ROLL) {
+                    targets[0] = &flightController.getPidRoll();
+                } else {
+                    targets[0] = &flightController.getPidPitch();
+                }
+
+                for (PIDController *p : targets) {
+                    if (!p) continue;
+                    p->setKp(kp);
+                    p->setKd(kd);
+                    if (doKi) p->setKi(ki);
+                }
                 flightController.publish();
                 applied = true;
 
@@ -827,6 +924,8 @@ namespace {
 
             printTuneResult(r, *rule, applied, doKi);
             if (applied) {
+                if (shared::axisIsDiagonal(r.axis))
+                    shell.println(F("in roll UND pitch geschrieben"));
                 shell.println(F("Startwert vom Pruefstand - im freien Flug zuerst"));
                 shell.println(F("Kd halbieren und mit Ki=0 beginnen."));
             }
@@ -842,7 +941,9 @@ namespace {
         if (o.go) {
             if (!validateRun(o)) return -1;
             if (!o.axisSet) {
-                shell.println(F("tune: erst Achse waehlen (-roll oder -pitch)"));
+                shell.println(F("tune: erst Achse waehlen"));
+                shell.println(F("      Flugachse:      -roll  -pitch"));
+                shell.println(F("      Motordiagonale: -flbr  -frbl"));
                 return -1;
             }
             if (hAmp < 5.0f || hAmp > 400.0f) {
@@ -873,10 +974,11 @@ namespace {
             flightController.startTune(o.axis, o.throttle, o.maxUs, cfg);
 
             shell.print(F("[CLI] Autotune laeuft: "));
-            shell.print(o.axis == shared::AXIS_ROLL ? F("roll") : F("pitch"));
+            shell.print(runAxisName(o.axis));
             shell.print(F(", h="));      shell.print(hAmp, 0);
             shell.print(F(", eps="));    shell.print(eps, 1);
             shell.print(F(", cycles=")); shell.println(cycles);
+            printAxisRig(o.axis);
             shell.println(F("[CLI] danach 'tune -show' bzw. 'tune -apply'"));
             return 0;
         }

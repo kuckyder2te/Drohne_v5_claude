@@ -60,6 +60,24 @@
 #define BENCH_LIMIT_DEG      25.0f
 #define BENCH_TIMEOUT_S      20
 
+// Umrechnung Motordiagonale <-> Flugachse.
+//
+// Liegt die Wippenstange auf einer Motordiagonalen, treiben nur die beiden
+// Motoren der anderen Diagonalen - dafuer mit dem Hebelarm a*sqrt(2) statt a.
+// Das Traegheitsmoment ist beim symmetrischen X um beide Diagonalen genauso
+// gross wie um Roll/Pitch (jeweils 4*m*a^2), es bleibt also nur der
+// Unterschied in der Anregung:
+//   Diagonale: 2 Motoren * c * a*sqrt(2) = 2*sqrt(2) * a*k*c
+//   Roll:      4 Motoren * c * a         = 4         * a*k*c
+// Verhaeltnis 2*sqrt(2)/4 = 1/sqrt(2) = 0,7071. Ein auf der Diagonalen
+// ermittelter Beiwert wird mit diesem Faktor zu Roll/Pitch; umgekehrt faehrt
+// der Diagonal-Pruefstand die Roll-Beiwerte durch diesen Faktor geteilt.
+//
+// Gilt fuer den symmetrischen X-Rahmen (gleich lange Arme, 90 Grad). Bei
+// gestrecktem Rahmen (Deadcat) stimmt weder der 45-Grad-Anteil der Projektion
+// noch die Traegheitsgleichheit - dann ist dieser Wert anzupassen.
+#define DIAG_AXIS_GAIN       0.70710678f
+
 // ── Relay-Feedback-Autotune (Aastroem-Haegglund) ───────────
 #define TUNE_H_US            60.0f    // Relais-Amplitude
 #define TUNE_EPS_DEG         1.0f     // Hysterese
@@ -91,7 +109,7 @@
 #define ESC_FREQ_HZ 50
 
 // ── Bluetooth HC-06 (UART0) ────────────────────────────────
-#define BT_UART Serial1
+#define BT_UART Serial
 #define BT_BAUD 9600
 
 // ── Flugparameter ──────────────────────────────────────────
