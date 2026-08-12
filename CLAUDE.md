@@ -4,7 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build System
 
-This is a **PlatformIO** project targeting the **Raspberry Pi Pico** (RP2040) with the Earle Philhower Arduino core.
+This is a **PlatformIO** project targeting the **Raspberry Pi Pico 2 W** (RP2350, Cortex-M33 @ 150 MHz, 520 kB RAM, 4 MB Flash) with the Earle Philhower Arduino core. The firmware environment is `[env:rpipico2w]` (`default_envs`), board `rpipico2w`.
+
+It ran on a **Pico (RP2040)** before, and nothing in the code is RP2350-specific — the pinout is identical and the drivers are unchanged. Two things carried the port and matter if anyone ever switches back or forward:
+
+- **The PWM clock divider must come from the actual system clock.** `pwm_init_pin()` in [lib/MotorMixer/MotorMixer.cpp](lib/MotorMixer/MotorMixer.cpp) computes `clock_get_hz(clk_sys) / 1e6` so the PWM counter runs at exactly 1 MHz — one count = 1 µs, `wrap` 20000 = 50 Hz — on any clock. The old hardcoded `125.0f` was only right for the RP2040's 125 MHz; at the RP2350's 150 MHz it would have produced a 60 Hz frame with 0.833 µs per count, making every ESC pulse ~17 % short (`ESC_MIN_US` 1000 would have looked like 833 µs to the ESC).
+- **The cross-core synchronisation in [include/control/SharedState.h](include/control/SharedState.h) is unchanged and stays that way.** It uses only aligned 32-bit `volatile` accesses plus mutexes — correct on both chips. The Cortex-M33 does have real LDREX/STREX, so `__atomic_*` *would* work now, but converting buys nothing and would break back-portability.
+
+USB VID/PID differ from the RP2040 Pico, so **the COM port can change** — `upload_port`/`monitor_port` in `platformio.ini` are pinned to COM11 and may need adjusting after the swap.
 
 ```bash
 # Build
@@ -64,7 +71,7 @@ Der Regelkreis läuft auf **beiden Kernen**. Auslöser war eine Messung: `Normal
 Fünf Dinge sind hier tragend und leicht zu zerstören:
 
 - **Kein `LOGGER_*` auf Kern 1.** Die `*_FMT`-Makros schreiben in den *einen* globalen `logBuf` aus `src/myLogger.cpp`; eine Ausgabe von Kern 1 zerstört eine gleichzeitig laufende von Kern 0 mitten im `sprintf`. Deshalb hat `PIDController` ein `setQuiet(bool)`, das `AttitudeLoop::begin()` auf seinen Instanzen setzt — `setKp`/`reset`/`enableIntegral` loggen sonst. Meldungen laufen stattdessen über `CoreTlm::abortCode`, den Kern 0 in `abortText()` übersetzt.
-- **`__atomic_*` ist auf dem RP2040 unbrauchbar.** Cortex-M0+ hat kein LDREX/STREX; GCC löst die Builtins über eine Interrupt-Sperre auf, die nur gegen ISRs desselben Kerns schützt, **nicht gegen den anderen Kern**. Nutzbar sind nur ausgerichtete 32-Bit-`volatile`-Zugriffe (auf dem RP2040-Bus atomar) und Mutexe. Beides in [include/control/SharedState.h](include/control/SharedState.h): `CoreCmd` per Mutex + Generationszähler, `CoreTlm` per Seqlock, `g_estop`/`g_beatC0`/`g_beatC1` lock-frei.
+- **Synchronisiert wird nur über ausgerichtete 32-Bit-`volatile`-Zugriffe (auf dem Bus atomar) und Mutexe, nicht über `__atomic_*`.** Der Entwurf stammt vom RP2040: Cortex-M0+ hat kein LDREX/STREX, GCC löst die Builtins dort über eine Interrupt-Sperre auf, die nur gegen ISRs desselben Kerns schützt, **nicht gegen den anderen Kern**. Auf dem RP2350 (Cortex-M33) gäbe es echte Exclusive-Zugriffe, aber der vorhandene Ansatz ist auf beiden Chips korrekt und bleibt so. Beides in [include/control/SharedState.h](include/control/SharedState.h): `CoreCmd` per Mutex + Generationszähler, `CoreTlm` per Seqlock, `g_estop`/`g_beatC0`/`g_beatC1` lock-frei.
 - **Kern 1 wartet nie auf Kern 0.** `cmdFetch()` prüft lock-frei den Generationszähler und holt die neue Fassung nur, wenn `mutex_try_enter()` sofort gelingt — sonst regelt es mit der alten Kopie weiter. Ein CLI-Kommando kann den Regeltakt so nicht stören.
 - **Der Not-Aus verlässt sich nicht auf Kern 1.** `cli::update()` setzt bei `d` erst `g_estop`, dann schreibt Kern 0 die PWM-Register **selbst** über `MotorMixer::stopFast()` (logfrei, reine Registerzugriffe, von jedem Kern sicher). Kern 1 prüft `g_estop` als allererste Anweisung in `step()`.
 - **Beidseitiger Herzschlag.** Steht Kern 1, laufen die Motoren sonst mit dem letzten Wert weiter — der gefährlichste Zustand des Umbaus. Kern 0 prüft `g_beatC1` gegen `ATTITUDE_WATCHDOG_MS` (150 ms) und disarmt; Kern 1 prüft `g_beatC0` gegen `CORE0_WATCHDOG_MS` (500 ms) und stoppt die Motoren. `stats -hang` blockiert Kern 1 gezielt für 1 s, um das nachzuweisen — **dieser Test muss bestanden sein, bevor ein Propeller montiert wird.**
@@ -106,7 +113,7 @@ Ein Nebeneffekt, der bewusst so ist: **`pid -save` und `tune -save` sind im armi
 | [include/config.h](include/config.h) | All tunable parameters: ESC limits, PID defaults, flight parameters, `_SERIAL_LOG`/`_BT_LOG` log targets, `CLI_USE_BLUETOOTH` CLI-channel switch |
 | [include/pins.h](include/pins.h) | Single source of truth for all GPIO assignments |
 | [include/myLogger.h](include/myLogger.h) | `LOGGER_*` macros over the `bakercp/Logger` library, plus the shared `logBuf` used by the `*_FMT` variants. Output function `localLogger()` lives in `src/myLogger.cpp` and writes to `Serial` and/or `BT_UART` per `_SERIAL_LOG`/`_BT_LOG`; each standalone tool under `src/tools/` defines its own `logBuf` and sets its own log level, since `myLogger.cpp` isn't in its build |
-| [lib/MotorMixer/MotorMixer.cpp](lib/MotorMixer/MotorMixer.cpp) | PWM to ESCs using native RP2040 `hardware/pwm.h` SDK (50 Hz, 20000 wrap, 1000–2000 µs) |
+| [lib/MotorMixer/MotorMixer.cpp](lib/MotorMixer/MotorMixer.cpp) | PWM to ESCs using the native Pico-SDK `hardware/pwm.h` (50 Hz, 20000 wrap, 1000–2000 µs). Der Teiler kommt aus `clock_get_hz(clk_sys)`, damit der Zähler unabhängig vom Systemtakt exakt 1 MHz läuft — siehe Build System |
 | [src/control/PIDController.cpp](src/control/PIDController.cpp) | Custom PID — `useOffset=true` (height) adds `THROTTLE_OFFSET_US` so output is absolute throttle clamped to `[ESC_MIN_US, ESC_MAX_US]`; `useOffset=false` (roll/pitch) outputs a pure ±500 correction; integral only accumulates while `enableIntegral(true)`. Zeitbasis ist **`micros()`** (bei 2,5 ms Zyklus wäre `millis()` bis zu 40 % daneben). `computeWithRate()` nimmt den D-Anteil aus einer gemessenen Rate; `setQuiet()` schaltet alle `LOGGER_*` ab — Pflicht für jede Instanz auf Kern 1 |
 | [src/control/SharedState.cpp](src/control/SharedState.cpp) | Datenaustausch zwischen den Kernen: `CoreCmd` (Kern 0 → 1, Mutex + Generationszähler), `CoreTlm` (Kern 1 → 0, Seqlock), `TuneResult`, sowie `g_estop`/`g_beatC0`/`g_beatC1` lock-frei |
 | [src/control/AttitudeLoop.cpp](src/control/AttitudeLoop.cpp) | Der Regelkreis auf Kern 1: IMU, Roll/Pitch-PID, Mixing, Betriebsarten `MODE_FLIGHT`/`MODE_BENCH`/`MODE_TUNE`, Abbruchüberwachung. `axisProject()`/`axisDrive()`/`axisMotors()` bilden die vier Prüfstandsachsen (2 Flugachsen + 2 Motordiagonalen) auf die IMU-Winkel bzw. die Mixer-Eingänge ab — der Mixer selbst kennt nur Roll und Pitch. Loggt nie und wartet nie auf Kern 0 |
@@ -121,7 +128,7 @@ Ein Nebeneffekt, der bewusst so ist: **`pid -save` und `tune -save` sind im armi
 | [src/control/FlightController.cpp](src/control/FlightController.cpp) | Owns flight state (`armed`, `targetHeightCm`, status-log/arm-pending timers), the three `PIDController` instances, and `MotorMixer`; provides `requestArm()`/`disarm()`/`recalibrate()`/`adjustTargetHeight()`/`toggleStatusLog()`, the safety check (`checkSafety()`), the PID+mixing loop (`updateControlLoop()`) and the status log (`logStatus()`) — the flight-control logic that used to live directly in `main.cpp::loop()` |
 | [src/mode/NormalMode.cpp](src/mode/NormalMode.cpp) | Firmware composition root / sole entry point: defines the shared globals, does CLI + sensor init in `setup()`, runs the control loop in `loop()` (`cli::update()`, sensor updates, `FlightController::checkSafety()`/`updateArmPendingTimeout()`/`updateControlLoop()`/`logStatus()`). `main.cpp` just forwards to it |
 
-`MotorMixer`, `IMU`, `Barometer`, `Ultrasonic`, `Battery` live in `lib/<Name>/` (PlatformIO private libraries) rather than `src/`/`include/`, specifically so the standalone tools under `src/tools/` can link each one individually without pulling in `main.cpp` or unrelated modules — PlatformIO auto-links `lib/` into every environment regardless of the `build_src_filter` in effect. `PIDController`, `FlightController`, `cli`, `Settings`, `NormalMode` stay directly under `src/`/`include/` since only the main firmware needs them, and the firmware env (`[env:rpipico]`) excludes `src/tools/` via `build_src_filter = +<*> -<tools/>`. `main.cpp` is a two-line shim (`NormalMode::setup()`/`loop()`); the shared globals and all wiring live in `NormalMode.cpp`.
+`MotorMixer`, `IMU`, `Barometer`, `Ultrasonic`, `Battery` live in `lib/<Name>/` (PlatformIO private libraries) rather than `src/`/`include/`, specifically so the standalone tools under `src/tools/` can link each one individually without pulling in `main.cpp` or unrelated modules — PlatformIO auto-links `lib/` into every environment regardless of the `build_src_filter` in effect. `PIDController`, `FlightController`, `cli`, `Settings`, `NormalMode` stay directly under `src/`/`include/` since only the main firmware needs them, and the firmware env (`[env:rpipico2w]`) excludes `src/tools/` via `build_src_filter = +<*> -<tools/>`. `main.cpp` is a two-line shim (`NormalMode::setup()`/`loop()`); the shared globals and all wiring live in `NormalMode.cpp`.
 
 ### CLI (`src/comm/cli.cpp`)
 
@@ -252,7 +259,7 @@ pio run -e <name> --target upload
 pio device monitor
 ```
 
-(Equivalently, use the PlatformIO IDE sidebar → Project Tasks → the `test_<name>` env → Upload. A bare `pio run` builds only the firmware, thanks to `default_envs = rpipico`.)
+(Equivalently, use the PlatformIO IDE sidebar → Project Tasks → the `test_<name>` env → Upload. A bare `pio run` builds only the firmware, thanks to `default_envs = rpipico2w`.)
 
 - `src/tools/test_motors/` — all four motors together, plus an ESC-calibration sub-sequence (`c`/`k`/`m`); reads commands from `BT_UART` (`Serial1`) directly
 - `src/tools/test_motors_single/` — drive one motor by index (`1`=FL, `2`=FR, `3`=BR, `4`=BL); also via `BT_UART`
@@ -268,7 +275,7 @@ The former in-firmware `TEST_KEYBOARD` (BT/keyboard command echo + PID tuning) h
 ### Key Design Decisions
 
 - **ICM-20948 IMU via `ICM20948_WE` library** — replaced a previous custom MPU9250 I2C driver, driven by repeated ESD failures of MPU9250 boards (see README "Sicherheit & Handhabung"). On this specific board the sensor answers at I2C address 0x69 even with AD0 tied to GND, not the datasheet's 0x68 — hardcoded in `IMU.h`; don't "fix" it back to 0x68.
-- **Native RP2040 PWM SDK** (`hardware/pwm.h`) instead of `RP2040_PWM` library — more stable, no library dependency.
+- **Native Pico-SDK PWM** (`hardware/pwm.h`) instead of the `RP2040_PWM` library — more stable, no library dependency. Der Taktteiler wird aus `clock_get_hz(clk_sys)` berechnet statt fest verdrahtet, damit ein Zählschritt auf jedem Systemtakt 1 µs bleibt.
 - **Custom PID** instead of FastPID — FastPID's coefficient clamping conflicted with required ranges.
 - **Ultrasonic preferred over barometer** when in range (2–300 cm) — better accuracy and no warmup requirement.
 - **I2C bus recovery** — sends 9 clock pulses to release a stuck SDA line before every `Wire.begin()`, both in `IMU::begin(true)` (normal operation) and in the standalone `src/tools/test_i2c_scan/` tool (own copy, since that tool doesn't link `IMU`).

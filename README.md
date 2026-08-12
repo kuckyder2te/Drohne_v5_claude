@@ -1,4 +1,4 @@
-# 🚁 Drohnenprojekt — Raspberry Pi Pico Quadrocopter
+# 🚁 Drohnenprojekt — Raspberry Pi Pico 2 W Quadrocopter
 
 **Entwickler:** Willy  
 **Stand:** Schritt 8 von 8 — Schwebeflug-Test  
@@ -27,12 +27,12 @@
 
 | Komponente | Modell | Protokoll |
 |---|---|---|
-| MCU | Raspberry Pi Pico | — |
+| MCU | Raspberry Pi Pico 2 W (RP2350, 150 MHz) | — |
 | IMU | ICM-20948 9-DoF | I2C (0x69) |
 | Barometer | MS5611 | I2C (0x77) |
 | Funk | NRF24L01 | SPI (Phase 2) |
 | Bluetooth | HC-06 | UART0 |
-| Motoren | 4x Brushless + ESC | PWM (nativer RP2040 SDK) |
+| Motoren | 4x Brushless + ESC | PWM (nativer Pico-SDK) |
 
  (TDK InvenSense ICM-20948 9-DoF IMU STEMMA QT Qwiic-Schnittstelle für STEM-Projekte)
  [ICM-20948 -](https://https://www.adafruit.com/product/4554?srsltid=AfmBOoqJgrg_s14cHHcdieMGC8eEnMb_hd-T7yU6SlsRfc3GowI8pXJ1)
@@ -318,10 +318,10 @@ Alle Bibliotheken in `platformio.ini`. **Keine neuen Bibliotheken ohne Rückspra
 ### `platformio.ini`
 
 ```ini
-[env:rpipico]
+[env:rpipico2w]
 platform = https://github.com/maxgerhardt/platform-raspberrypi.git
 board_build.core = earlephilhower
-board = rpipico
+board = rpipico2w
 framework = arduino
 upload_protocol = picotool
 monitor_speed = 115200
@@ -414,7 +414,7 @@ pio run -e <name> --target upload
 pio device monitor
 ```
 
-Ein blankes `pio run` baut nur die Firmware (`default_envs = rpipico`).
+Ein blankes `pio run` baut nur die Firmware (`default_envs = rpipico2w`).
 **Immer nur ein Tool gleichzeitig flashen.** Details siehe `src/tools/README`.
 
 ### test_motors

@@ -2,13 +2,22 @@
 #include "myLogger.h"
 #include "config.h"
 #include "hardware/pwm.h"
+#include "hardware/clocks.h"
 
 // ── Hilfsfunktion: Pin als PWM konfigurieren ───────────────
+//
+// Der Teiler wird aus der TATSAECHLICHEN Systemtaktfrequenz berechnet, nicht
+// fest auf 125.0f gesetzt. Der Zaehler laeuft dadurch immer mit exakt 1 MHz,
+// ein Zaehlschritt ist also 1 us und der Wrap bei 20000 ergibt 50 Hz - egal
+// auf welchem Chip. Fest verdrahtete 125.0f galten nur fuer den RP2040 mit
+// 125 MHz; auf dem RP2350 (Pico 2 / 2 W, 150 MHz) waeren daraus 60 Hz Rahmen
+// und 0,833 us pro Zaehlschritt geworden, d.h. jeder ESC-Impuls rund 17 %
+// zu kurz - ESC_MIN_US 1000 haette wie 833 us ausgesehen.
 static void pwm_init_pin(uint8_t pin)
 {
     gpio_set_function(pin, GPIO_FUNC_PWM);
     uint slice = pwm_gpio_to_slice_num(pin);
-    pwm_set_clkdiv(slice, 125.0f);
+    pwm_set_clkdiv(slice, (float)clock_get_hz(clk_sys) / 1000000.0f);
     pwm_set_wrap(slice, 20000);
     pwm_set_enabled(slice, true);
 }

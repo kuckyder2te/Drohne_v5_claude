@@ -11,12 +11,17 @@
 // Kern 0 (NormalMode::loop): Ultraschall, Batterie, CLI, Hoehen-PID, Logging.
 // Kern 1 (AttitudeLoop):     IMU, Roll/Pitch-PID, Motor-Mixing @ATTITUDE_RATE_HZ.
 //
-// Der RP2040 ist ein Cortex-M0+ ohne LDREX/STREX. __atomic_* loest GCC hier
-// ueber eine Interrupt-Sperre auf - das schuetzt gegen ISRs auf demselben
-// Kern, NICHT gegen den anderen Kern. Nutzbar ist deshalb nur:
-//   - ausgerichtete 32-Bit-volatile-Zugriffe (auf dem RP2040-Bus atomar),
+// Synchronisiert wird ausschliesslich ueber:
+//   - ausgerichtete 32-Bit-volatile-Zugriffe (auf dem Bus atomar),
 //   - Mutex fuer alles Groessere.
 // Beides kommt hier vor, jeweils dort, wo es passt.
+//
+// Warum kein __atomic_*: der Entwurf stammt vom RP2040, einem Cortex-M0+ ohne
+// LDREX/STREX. GCC loest die Builtins dort ueber eine Interrupt-Sperre auf -
+// das schuetzt gegen ISRs auf demselben Kern, NICHT gegen den anderen Kern.
+// Der RP2350 (Cortex-M33) haette echte Exclusive-Zugriffe, aber der hiesige
+// Ansatz ist auf beiden Chips korrekt und bleibt deshalb unveraendert; er
+// haelt den Code zugleich auf einen RP2040 rueckportierbar.
 namespace shared {
 
 // Betriebsart des Lageregelkreises auf Kern 1.

@@ -6,9 +6,9 @@ src/ (insbesondere nicht main.cpp/NormalMode) mitkompiliert.
 Jedes Tool ist eine eigene PlatformIO-Umgebung in platformio.ini
 ([env:test_<name>]) und wird per build_src_filter isoliert gebaut:
 build_src_filter = -<*> +<tools/test_<name>/> laesst genau diesen Tool-Ordner
-uebrig; lib/ wird automatisch mitgelinkt. Die Firmware-Umgebung [env:rpipico]
+uebrig; lib/ wird automatisch mitgelinkt. Die Firmware-Umgebung [env:rpipico2w]
 schliesst umgekehrt tools/ aus (build_src_filter = +<*> -<tools/>), und
-"default_envs = rpipico" sorgt dafuer, dass ein blankes "pio run" nur die
+"default_envs = rpipico2w" sorgt dafuer, dass ein blankes "pio run" nur die
 Firmware baut.
 
 Vorhandene Tools:
