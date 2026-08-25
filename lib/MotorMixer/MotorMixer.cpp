@@ -34,16 +34,51 @@ void MotorMixer::_writePWM(uint8_t pin, uint16_t us)
     pwm_set_chan_level(slice, channel, us_to_count(us));
 }
 
-void MotorMixer::begin()
+// ── ESC-Stromversorgung ────────────────────────────────────
+// Low-Side-N-FET (IRLZ44N) an PIN_ESC_POWER: HIGH = ESCs am LiPo.
+// Nur ein GPIO-Schreibzugriff, kein Log - damit von jedem Kern und aus
+// jedem Zustand heraus aufrufbar.
+void MotorMixer::powerOn()
 {
+    digitalWrite(PIN_ESC_POWER, HIGH);
+    _powered = true;
+}
+
+void MotorMixer::powerOff()
+{
+    digitalWrite(PIN_ESC_POWER, LOW);
+    _powered = false;
+}
+
+void MotorMixer::begin(bool autoPower)
+{
+    // Zuerst der Schalter, und zwar aus: der GPIO ist bis hierher hochohmig,
+    // die ESCs duerfen erst Strom bekommen, wenn ein definiertes Signal
+    // anliegt (siehe ESC_PWM_SETTLE_MS in config.h).
+    pinMode(PIN_ESC_POWER, OUTPUT);
+    powerOff();
+
     pwm_init_pin(PIN_MOTOR_FL);
     pwm_init_pin(PIN_MOTOR_FR);
     pwm_init_pin(PIN_MOTOR_BL);
     pwm_init_pin(PIN_MOTOR_BR);
 
     stop();
-    delay(2000);
-    LOGGER_NOTICE("[MOTOR] ESC Initialisierung abgeschlossen");
+
+    if (!autoPower)
+    {
+        LOGGER_NOTICE("[MOTOR] PWM auf MIN - ESCs noch stromlos");
+        return;
+    }
+
+    // Reihenfolge ist hier der ganze Zweck der Uebung: erst MIN ausgeben,
+    // dann einschalten. Der ESC liest beim Hochlaufen sein Eingangssignal
+    // und geht bei MIN in den Normalbetrieb; laege MAX an, ginge er in die
+    // Kalibrierung.
+    delay(ESC_PWM_SETTLE_MS);
+    powerOn();
+    delay(ESC_BOOT_MS);
+    LOGGER_NOTICE("[MOTOR] ESC Initialisierung abgeschlossen (Strom EIN)");
 }
 
 void MotorMixer::setThrottle(uint16_t throttle_us)

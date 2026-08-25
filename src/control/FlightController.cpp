@@ -22,6 +22,11 @@ namespace
 
 void FlightController::begin(Settings &settings)
 {
+    // begin() gibt erst MIN aus und schaltet die ESCs danach ueber den MOSFET
+    // an PIN_ESC_POWER zu - sie laufen damit im Normalbetrieb hoch und bleiben
+    // fuer den Rest der Laufzeit am Strom. Der Not-Aus schaltet den Strom
+    // bewusst NICHT ab: stromlose ESCs im Flug heissen freier Fall, richtig
+    // ist MIN auf allen vier Kanaelen (stopFast()).
     _motors.begin();
     _pidHeight.begin();
     _pidRoll.begin();

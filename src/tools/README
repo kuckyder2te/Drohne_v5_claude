@@ -30,3 +30,16 @@ Das fruehere in-Firmware TEST_KEYBOARD (Tastatur-/CLI-Eingabe) hat kein eigenes
 Tool: es haengt eng an der CLI/PIDController/Settings (im restlichen src/) und
 laesst sich nicht sinnvoll isolieren - die Bedien- und PID-Tuning-Eingabe testet
 der Normalbetrieb der eigentlichen Firmware (Shell-Befehl "help").
+
+Eine Entscheidung, die ich für dich getroffen habe
+Der Not-Aus schaltet den ESC-Strom nicht ab. d, der Kern-1-Watchdog und disarm() 
+bleiben wie sie sind (MIN auf allen vier Kanälen). Stromlose ESCs im Flug heißen
+ freier Fall — der MOSFET ist ein Einschalt-Werkzeug, kein zweiter Not-Aus. 
+ Die Firmware schaltet einmal in begin() ein und lässt an; powerOff() kommt nur
+  in den Werkzeugen vor. Wenn du das anders willst (z. B. powerOff() bei stop() 
+  am Prüfstand), sag Bescheid.
+
+CLAUDE.md hat einen neuen Abschnitt „ESC-Stromversorgung (MOSFET an GP28)" plus
+ einen Eintrag in den Hardware Notes bekommen.
+
+Vor dem ersten Test mit Propellern: prüf bitte am Multimeter, dass GP28 nach dem Reset und im BOOTSEL-Modus tatsächlich unten bleibt — das hängt am Pulldown, nicht am Code.

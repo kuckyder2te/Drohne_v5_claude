@@ -108,6 +108,17 @@
 #define ESC_MAX_US 2000
 #define ESC_FREQ_HZ 50
 
+// ── ESC-Stromversorgung (MOSFET an PIN_ESC_POWER) ──────────
+// Die ESCs haengen nicht mehr direkt am LiPo, sondern hinter einem
+// Logic-Level-N-FET an GP28. Damit bestimmt die Firmware, WAS der ESC beim
+// Einschalten als Signal sieht - und genau das entscheidet seine Betriebsart:
+//   MIN (1000 us) beim Einschalten -> normaler Betrieb
+//   MAX (2000 us) beim Einschalten -> Kalibriermodus (siehe test_motors 'k')
+// Vorher war beides gleichzeitig am Strom, der Kalibriermodus liess sich nur
+// durch Ab- und Anstecken des LiPo erreichen.
+#define ESC_PWM_SETTLE_MS 100   // PWM muss vor dem Einschalten stehen (>=2 Rahmen @50 Hz)
+#define ESC_BOOT_MS 2000        // ESC-Eigeninitialisierung nach dem Einschalten
+
 // ── Bluetooth HC-06 (UART0) ────────────────────────────────
 #define BT_UART Serial
 #define BT_BAUD 9600

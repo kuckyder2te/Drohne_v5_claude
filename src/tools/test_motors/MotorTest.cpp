@@ -25,8 +25,9 @@ void printMotorHelp()
 {
     LOGGER_NOTICE("-----------------------------------------");
     LOGGER_NOTICE(" MOTORTEST: + - s h");
-    LOGGER_NOTICE(" c = Kalibrierung: LiPo ZUERST trennen");
-    LOGGER_NOTICE(" k = MAX senden (dann LiPo anstecken)");
+    LOGGER_NOTICE(" p = ESC-Strom EIN/AUS (MOSFET GP28)");
+    LOGGER_NOTICE(" c = Kalibrierung: ESC-Strom AUS");
+    LOGGER_NOTICE(" k = MAX senden + ESC-Strom EIN");
     LOGGER_NOTICE(" m = MIN senden (Kalibrierung fertig)");
     LOGGER_NOTICE("-----------------------------------------");
 }
@@ -47,8 +48,12 @@ void setup()
 
     LOGGER_NOTICE(">> Modus: MOTORTEST");
     printMotorHelp();
-    motors.begin();
+    // Bewusst stromlos starten: der ESC leitet seine Betriebsart aus dem
+    // Signal ab, das beim Einschalten anliegt. Erst 'p' (Normalbetrieb, MIN
+    // liegt an) oder 'k' (Kalibrierung, MAX liegt an) legt ihn fest.
+    motors.begin(false);
     battery.begin();
+    LOGGER_NOTICE("[ESC] Strom AUS - 'p' fuer Normalbetrieb, 'c' fuer Kalibrierung");
 }
 
 void loop()
@@ -102,19 +107,46 @@ void loop()
         case 'H':
             printMotorHelp();
             break;
-        case 'c':
-        case 'C':
-            LOGGER_NOTICE("[ESC] SCHRITT 1: Jetzt LiPo TRENNEN!");
-            LOGGER_NOTICE("[ESC] Dann 'k' druecken - Pico sendet danach MAX (2000us)");
-            LOGGER_NOTICE("[ESC] Erst nach 'k': LiPo wieder anstecken");
+        case 'p':
+        case 'P':
             currentThrottle = ESC_MIN_US;
             motors.stop();
+            if (motors.isPowered())
+            {
+                motors.powerOff();
+                LOGGER_NOTICE("[ESC] Strom AUS");
+            }
+            else
+            {
+                // Immer erst MIN ausgeben, dann einschalten - sonst startet
+                // der ESC in der Kalibrierung statt im Normalbetrieb.
+                delay(ESC_PWM_SETTLE_MS);
+                motors.powerOn();
+                LOGGER_NOTICE("[ESC] Strom EIN bei MIN - Normalbetrieb");
+            }
+            break;
+        case 'c':
+        case 'C':
+            LOGGER_NOTICE("[ESC] SCHRITT 1: ESC-Strom wird abgeschaltet (MOSFET GP28)");
+            LOGGER_NOTICE("[ESC] Dann 'k' druecken - Pico sendet MAX und schaltet ein");
+            currentThrottle = ESC_MIN_US;
+            motors.stop();
+            motors.powerOff();
             break;
         case 'k':
         case 'K':
-            LOGGER_NOTICE("[ESC] SCHRITT 2: Sende MAX (2000us) - jetzt LiPo anstecken!");
+            if (motors.isPowered())
+            {
+                // Ein bereits laufender ESC geht durch nachtraegliches MAX
+                // nicht in die Kalibrierung - die liest er nur beim Hochlaufen.
+                LOGGER_NOTICE("[ESC] ESCs sind am Strom - erst 'c' druecken!");
+                break;
+            }
+            LOGGER_NOTICE("[ESC] SCHRITT 2: MAX (2000us) liegt an, schalte ESC-Strom EIN");
             currentThrottle = ESC_MAX_US;
             motors.setThrottle(currentThrottle);
+            delay(ESC_PWM_SETTLE_MS);
+            motors.powerOn();
             LOGGER_NOTICE("[ESC] Warte auf ESC-Piepstoene, dann 'm' druecken");
             break;
         case 'm':

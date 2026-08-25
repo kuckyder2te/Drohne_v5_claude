@@ -29,6 +29,7 @@ void printMenu()
     LOGGER_NOTICE(" 1=FL 2=FR 3=BR 4=BL  (Motor waehlen)");
     LOGGER_NOTICE(" + = schneller   - = langsamer");
     LOGGER_NOTICE(" s = Stop        h = Hilfe erneut anzeigen");
+    LOGGER_NOTICE(" p = ESC-Strom EIN/AUS (MOSFET GP28)");
     LOGGER_NOTICE("-----------------------------------------");
 }
 
@@ -48,8 +49,11 @@ void setup()
 
     LOGGER_NOTICE(">> Modus: EINZELMOTOR TEST");
     printMenu();
-    motors.begin();
+    // Stromlos starten - dieses Tool laeuft haeufig mit montierten
+    // Propellern (Drehrichtungspruefung). Erst 'p' legt Spannung auf die ESCs.
+    motors.begin(false);
     battery.begin();
+    LOGGER_NOTICE("[ESC] Strom AUS - mit 'p' einschalten");
 }
 
 void loop()
@@ -129,6 +133,25 @@ void loop()
         case 'h':
         case 'H':
             printMenu();
+            break;
+        case 'p':
+        case 'P':
+            activeMotor = 0;
+            singleThrottle = ESC_MIN_US;
+            motors.stop();
+            if (motors.isPowered())
+            {
+                motors.powerOff();
+                LOGGER_NOTICE("[ESC] Strom AUS");
+            }
+            else
+            {
+                // Erst MIN ausgeben, dann einschalten: der ESC uebernimmt
+                // beim Hochlaufen das anliegende Signal als Betriebsart.
+                delay(ESC_PWM_SETTLE_MS);
+                motors.powerOn();
+                LOGGER_NOTICE("[ESC] Strom EIN bei MIN - Motor waehlen (1-4)");
+            }
             break;
         }
     }

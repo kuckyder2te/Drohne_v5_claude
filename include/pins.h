@@ -7,9 +7,20 @@
 #define PIN_MOTOR_BL 15 // Back Left white
 
 // Farbmarkierung am ESC
-// 1 (weisser Punkt) black
-// 2                 green
-// 3                 yellow
+// 1 (A) (weisser Punkt) black
+// 2 (B)                green
+// 3 (C)                yellow
+
+
+// ── ESC-Stromversorgung ──────────────────────────
+// GP28 (Board-Pin 34) schaltet ueber einen Logic-Level-N-FET (IRLZ44N,
+// Low-Side) die LiPo-Masse der vier ESCs. HIGH = ESCs am Strom.
+//
+// WICHTIG (Hardware): Zwischen Gate und Masse gehoert ein Pulldown (~10 k).
+// Vom Reset bis zum ersten pinMode() ist der GPIO hochohmig; ohne Pulldown
+// haengt das Gate in der Luft und die ESCs koennen waehrend Reset, BOOTSEL
+// oder Flashen unkontrolliert Strom bekommen.
+#define PIN_ESC_POWER 28
 
 #define PIN_SDA 4
 #define PIN_SCL 5 
@@ -36,7 +47,9 @@
 
 // ── Sonstige Pins ────────────────────────────────
 #define BUZZER 10
-#define BATTERY 26  // ADC0 
+#define BATTERY 26  // ADC0
+
+
 
 
 

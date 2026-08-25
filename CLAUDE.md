@@ -113,7 +113,7 @@ Ein Nebeneffekt, der bewusst so ist: **`pid -save` und `tune -save` sind im armi
 | [include/config.h](include/config.h) | All tunable parameters: ESC limits, PID defaults, flight parameters, `_SERIAL_LOG`/`_BT_LOG` log targets, `CLI_USE_BLUETOOTH` CLI-channel switch |
 | [include/pins.h](include/pins.h) | Single source of truth for all GPIO assignments |
 | [include/myLogger.h](include/myLogger.h) | `LOGGER_*` macros over the `bakercp/Logger` library, plus the shared `logBuf` used by the `*_FMT` variants. Output function `localLogger()` lives in `src/myLogger.cpp` and writes to `Serial` and/or `BT_UART` per `_SERIAL_LOG`/`_BT_LOG`; each standalone tool under `src/tools/` defines its own `logBuf` and sets its own log level, since `myLogger.cpp` isn't in its build |
-| [lib/MotorMixer/MotorMixer.cpp](lib/MotorMixer/MotorMixer.cpp) | PWM to ESCs using the native Pico-SDK `hardware/pwm.h` (50 Hz, 20000 wrap, 1000–2000 µs). Der Teiler kommt aus `clock_get_hz(clk_sys)`, damit der Zähler unabhängig vom Systemtakt exakt 1 MHz läuft — siehe Build System |
+| [lib/MotorMixer/MotorMixer.cpp](lib/MotorMixer/MotorMixer.cpp) | PWM to ESCs using the native Pico-SDK `hardware/pwm.h` (50 Hz, 20000 wrap, 1000–2000 µs). Der Teiler kommt aus `clock_get_hz(clk_sys)`, damit der Zähler unabhängig vom Systemtakt exakt 1 MHz läuft — siehe Build System. Schaltet außerdem die ESC-Stromversorgung über `PIN_ESC_POWER` (`powerOn()`/`powerOff()`/`isPowered()`, `begin(bool autoPower)`) — siehe ESC-Stromversorgung unten |
 | [src/control/PIDController.cpp](src/control/PIDController.cpp) | Custom PID — `useOffset=true` (height) adds `THROTTLE_OFFSET_US` so output is absolute throttle clamped to `[ESC_MIN_US, ESC_MAX_US]`; `useOffset=false` (roll/pitch) outputs a pure ±500 correction; integral only accumulates while `enableIntegral(true)`. Zeitbasis ist **`micros()`** (bei 2,5 ms Zyklus wäre `millis()` bis zu 40 % daneben). `computeWithRate()` nimmt den D-Anteil aus einer gemessenen Rate; `setQuiet()` schaltet alle `LOGGER_*` ab — Pflicht für jede Instanz auf Kern 1 |
 | [src/control/SharedState.cpp](src/control/SharedState.cpp) | Datenaustausch zwischen den Kernen: `CoreCmd` (Kern 0 → 1, Mutex + Generationszähler), `CoreTlm` (Kern 1 → 0, Seqlock), `TuneResult`, sowie `g_estop`/`g_beatC0`/`g_beatC1` lock-frei |
 | [src/control/AttitudeLoop.cpp](src/control/AttitudeLoop.cpp) | Der Regelkreis auf Kern 1: IMU, Roll/Pitch-PID, Mixing, Betriebsarten `MODE_FLIGHT`/`MODE_BENCH`/`MODE_TUNE`, Abbruchüberwachung. `axisProject()`/`axisDrive()`/`axisMotors()` bilden die vier Prüfstandsachsen (2 Flugachsen + 2 Motordiagonalen) auf die IMU-Winkel bzw. die Mixer-Eingänge ab — der Mixer selbst kennt nur Roll und Pitch. Loggt nie und wartet nie auf Kern 0 |
@@ -250,6 +250,21 @@ Abbrüche werden auf Kern 1 jeden Zyklus geprüft (Winkelgrenze in 3 Zyklen in F
 
 Der Messschrieb geht über `shell.print` auf den CLI-Kanal, also aktuell USB @115200 (≈ 14 s für den vollen Puffer). Über BT @9600 wären es ~156 s — deshalb ist der Dump nur disarmiert erlaubt und zählt in der Druckschleife `g_beatC0` weiter, sonst liefe der Herzschlag ab.
 
+### ESC-Stromversorgung (MOSFET an GP28)
+
+Die vier ESCs hängen nicht direkt am LiPo, sondern hinter einem Logic-Level-N-FET (IRLZ44N, Low-Side) an **`PIN_ESC_POWER` = GP28** (Board-Pin 34). HIGH = ESCs am Strom. Grund: **ein ESC leitet seine Betriebsart aus dem Signal ab, das beim Hochlaufen anliegt** — MIN (1000 µs) = Normalbetrieb, MAX (2000 µs) = Kalibriermodus. Vorher bekam alles gleichzeitig Strom, und die Kalibrierung ging nur über physisches Ab- und Anstecken des LiPo (so stand es in `printMotorHelp()`).
+
+`MotorMixer::begin(bool autoPower = true)` hält die Reihenfolge ein und ist der einzige Ort, an dem sie steht: Pin auf OUTPUT + LOW → PWM aufsetzen → `stop()` (MIN) → `ESC_PWM_SETTLE_MS` (100 ms, ≥ 2 Rahmen bei 50 Hz) → `powerOn()` → `ESC_BOOT_MS` (2000 ms ESC-Eigeninitialisierung). Beide Konstanten in `config.h`.
+
+Vier Punkte, die leicht kaputtgehen:
+
+- **`powerOn()` fasst die PWM absichtlich nicht an.** Was gerade ausgegeben wird, *ist* die Betriebsart, in der der ESC hochläuft — ein „Sicherheitshalber MIN" in `powerOn()` würde den Kalibrierpfad (`k`) unbrauchbar machen. Wer Normalbetrieb will, sorgt vorher selbst für MIN.
+- **Der Not-Aus schaltet den Strom nicht ab.** Stromlose ESCs im Flug heißen freier Fall; richtig ist MIN auf allen vier Kanälen (`stopFast()`). Die Firmware schaltet nach `FlightController::begin()` einmal ein und lässt an — `powerOff()` gibt es nur in den Werkzeugen.
+- **Hardware: Pulldown ~10 k zwischen Gate und Masse.** Vom Reset bis zum ersten `pinMode()` ist der GPIO hochohmig; ohne Pulldown hängt das Gate in der Luft und die ESCs können beim Reset, im BOOTSEL-Modus oder beim Flashen unkontrolliert Strom bekommen. Der Firmware-Pfad allein reicht dafür nicht.
+- **Die Werkzeuge starten stromlos** (`motors.begin(false)`), die Firmware nicht. `test_motors`/`test_motors_single` laufen oft mit montierten Propellern; dort legt erst `p` (bzw. `k`) Spannung auf die ESCs.
+
+Kalibrierung in `test_motors` ohne Steckerziehen: `c` (Strom aus) → `k` (MAX ausgeben, dann einschalten) → Piepstöne abwarten → `m` (MIN). `k` verweigert die Arbeit, wenn die ESCs schon am Strom sind — nachträgliches MAX bringt einen laufenden ESC nicht in die Kalibrierung.
+
 ### Test Modes
 
 Six former `TEST_*` modes are standalone tools under [src/tools/](src/tools/) — each its own tiny program (own `setup()`/`loop()`) and its own PlatformIO environment `[env:test_<name>]`. Each env sets `build_src_filter = -<*> +<tools/test_<name>/>`, so **only that one tool folder** compiles (main.cpp/NormalMode/the rest of `src/` are excluded); `lib/` is still auto-linked, giving each tool just the driver module(s) it actually `#include`s. Each tool also defines its own `logBuf` and calls `Logger::setLogLevel(Logger::NOTICE)` in `setup()`, since `src/myLogger.cpp` isn't in its build while `lib/` — which uses the `*_FMT` macros — is linked anyway:
@@ -261,8 +276,8 @@ pio device monitor
 
 (Equivalently, use the PlatformIO IDE sidebar → Project Tasks → the `test_<name>` env → Upload. A bare `pio run` builds only the firmware, thanks to `default_envs = rpipico2w`.)
 
-- `src/tools/test_motors/` — all four motors together, plus an ESC-calibration sub-sequence (`c`/`k`/`m`); reads commands from `BT_UART` (`Serial1`) directly
-- `src/tools/test_motors_single/` — drive one motor by index (`1`=FL, `2`=FR, `3`=BR, `4`=BL); also via `BT_UART`
+- `src/tools/test_motors/` — all four motors together, plus an ESC-calibration sub-sequence (`c`/`k`/`m`) und `p` als Stromschalter; startet stromlos, reads commands from `BT_UART` (`Serial1`) directly
+- `src/tools/test_motors_single/` — drive one motor by index (`1`=FL, `2`=FR, `3`=BR, `4`=BL), `p` schaltet den ESC-Strom; startet stromlos; also via `BT_UART`
 - `src/tools/test_barometer/` — continuous pressure/altitude/temperature print
 - `src/tools/test_imu/` — continuous roll/pitch/AccZ print
 - `src/tools/test_ultrasonic/` — HC-SR04 distance print every 200 ms
@@ -300,6 +315,7 @@ See README.md for full hardware detail (pinout table, motor spin-direction verif
 
 - **Kein Barometer im Flugbetrieb**: erwartet — `BARO_ENABLED` ist in `config.h` auskommentiert, damit Kern 1 den I2C-Bus exklusiv hat. `recalibrate` meldet das entsprechend, Höhe kommt nur vom Ultraschall. Das Barometer selbst ist unverändert und über `pio run -e test_barometer` weiterhin prüfbar.
 - **`loopHz` in `stats` deutlich unter 400**: `overruns` mitprüfen. Steigt der Wert, braucht ein Zyklus länger als `ATTITUDE_PERIOD_US` — meist ein versehentlich auf Kern 1 gelandeter blockierender Aufruf (`delay()`, `LOGGER_*`, `Serial.print`).
+- **Motoren reagieren nicht, ESCs bleiben still**: ESC-Strom prüfen — GP28 muss HIGH sein. In den Werkzeugen erst `p` drücken (sie starten stromlos); in der Firmware macht das `MotorMixer::begin()`. Piept ein ESC dauerhaft statt zu armen, lag beim Einschalten nicht MIN an (Reihenfolge in `begin()` verändert?).
 - **MS5611 not found**: check PS/NCS pins on the CJMCU-10DOF-style board are tied to 3.3 V; run `pio run -e test_i2c_scan --target upload`.
 - **Barometer drift indoors**: needs the full 90 s warmup and a `recalibrate` immediately before arming (nur relevant mit `BARO_ENABLED`).
 - **No `[CTRL]`/`[SAFETY]` messages over USB**: expected — `_SERIAL_LOG` is off, logs go to BT only. Define `_SERIAL_LOG` in `config.h` to mirror them onto USB. Conversely, if the CLI prompt is missing on COM11, check that `CLI_USE_BLUETOOTH` is still commented out.

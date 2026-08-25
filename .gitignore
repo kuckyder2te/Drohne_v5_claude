@@ -6,3 +6,5 @@
 doc/
 *.ino
 Thumbs.db
+doxygen_docs/
+Drohne_v5_Doxygen_Doku.zip
