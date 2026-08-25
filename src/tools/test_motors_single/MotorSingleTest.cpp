@@ -27,8 +27,10 @@ void printMenu()
     LOGGER_NOTICE("-----------------------------------------");
     LOGGER_NOTICE(" EINZELMOTOR TEST");
     LOGGER_NOTICE(" 1=FL 2=FR 3=BR 4=BL  (Motor waehlen)");
-    LOGGER_NOTICE(" + = schneller   - = langsamer");
-    LOGGER_NOTICE(" s = Stop        h = Hilfe erneut anzeigen");
+    LOGGER_NOTICE(" + = schneller");
+    LOGGER_NOTICE(" - = langsamer");
+    LOGGER_NOTICE(" s = Stop");
+    LOGGER_NOTICE(" h = Hilfe erneut anzeigen");
     LOGGER_NOTICE(" p = ESC-Strom EIN/AUS (MOSFET GP28)");
     LOGGER_NOTICE("-----------------------------------------");
 }
