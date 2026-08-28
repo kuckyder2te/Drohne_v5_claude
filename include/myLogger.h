@@ -14,7 +14,7 @@
 //#if (defined LOCAL_DEBUG || defined GLOBAL_DEBUG) && defined DEBUG
 // Gemeinsamer Formatierpuffer aller *_FMT-Makros.
 // ACHTUNG: die Makros nutzen das unbegrenzte sprintf(). Die laengste Zeile im
-// Projekt ist die Statusausgabe in FlightController::logStatus() mit rund 106
+// Projekt ist die Statusausgabe in FlightController::logStatus() mit rund 122
 // Zeichen - daher 160 mit Reserve. Wer eine laengere Formatzeichenkette
 // hinzufuegt, muss den Puffer mitwachsen lassen. Groesse muss in JEDER
 // Definition identisch sein (src/myLogger.cpp und je einmal pro Tool unter

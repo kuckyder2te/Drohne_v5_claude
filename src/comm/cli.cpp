@@ -7,6 +7,7 @@
 #include "storage/Settings.h"
 #include "Barometer.h"
 #include "IMU.h"
+#include "Ultrasonic.h"
 #include <SimpleSerialShell.h>
 #include <math.h>
 
@@ -17,6 +18,7 @@ extern FlightController flightController;
 extern Settings         settings;
 extern Barometer        baro;
 extern IMU              imu;
+extern Ultrasonic       ultrasonic;
 
 namespace {
     Stream *cliStream = nullptr;
@@ -233,6 +235,24 @@ namespace {
     int cmdGetArmed(int /*argc*/, char ** /*argv*/) {
         shell.print(F("armed="));
         shell.println(flightController.isArmed() ? F("1") : F("0"));
+        return 0;
+    }
+
+    // Beide Ultraschallsensoren einzeln - der Pruefbefehl fuer die Montage.
+    // "h" ist der fusionierte Wert (Minimum der frischen Kanaele), also das,
+    // was der Hoehenregler tatsaechlich sieht. Ein grosser "spread" bei flach
+    // liegender Drohne heisst: die Sensoren sind unterschiedlich hoch montiert
+    // oder einer sieht etwas Eigenes (Landebein, Kabel) - bei Minimum-Fusion
+    // bestimmt dann der zu niedrig messende Sensor die Regelgroesse.
+    int cmdGetDistance(int /*argc*/, char ** /*argv*/) {
+        shell.print(F("{\"h\":"));        shell.print(ultrasonic.getAltitudeCm(), 1);
+        shell.print(F(",\"ok\":"));       shell.print(ultrasonic.isValid() ? 1 : 0);
+        shell.print(F(",\"s1\":"));       shell.print(ultrasonic.getAltitudeCm(0), 1);
+        shell.print(F(",\"ok1\":"));      shell.print(ultrasonic.isValid(0) ? 1 : 0);
+        shell.print(F(",\"s2\":"));       shell.print(ultrasonic.getAltitudeCm(1), 1);
+        shell.print(F(",\"ok2\":"));      shell.print(ultrasonic.isValid(1) ? 1 : 0);
+        shell.print(F(",\"spread\":"));   shell.print(ultrasonic.getSpreadCm(), 1);
+        shell.println('}');
         return 0;
     }
 
@@ -1010,6 +1030,7 @@ namespace cli {
         shell.addCommand(F("setHeight cm - Zielhoehe setzen"), cmdSetHeight);
         shell.addCommand(F("getHeight - Zielhoehe ausgeben"), cmdGetHeight);
         shell.addCommand(F("getArmed - Flugzustand ausgeben"), cmdGetArmed);
+        shell.addCommand(F("getDistance - beide Ultraschallsensoren als JSON"), cmdGetDistance);
         shell.addCommand(F("pid - PID anzeigen/setzen, 'pid -h' fuer Optionen"), cmdPid);
 
         shell.addCommand(F("stats - Lageregelkreis Kern 1 als JSON"), cmdStats);

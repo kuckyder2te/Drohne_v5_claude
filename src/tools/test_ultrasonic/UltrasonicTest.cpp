@@ -30,18 +30,27 @@ void setup()
 
 void loop()
 {
-    ultrasonic.update();
-    static uint32_t lastUltra = 0;
-    if (millis() - lastUltra >= 200)
+    // Gleiche Kadenz wie NormalMode::loop() (ULTRA_UPDATE_MS). Jeder Aufruf
+    // misst genau einen Sensor im Wechsel, ein einzelner Sensor kommt also
+    // alle 100 ms dran. Der Treiber sperrt zu dichte Pings zusaetzlich selbst
+    // (ULTRASONIC_MIN_PING_MS), frueher tat das ein delay(30) in update().
+    static uint32_t lastPing = 0;
+    if (millis() - lastPing >= ULTRA_UPDATE_MS)
     {
-        lastUltra = millis();
-        if (ultrasonic.isValid())
-        {
-            LOGGER_NOTICE_FMT("[ULTRA] Hoehe: %.1f cm", ultrasonic.getAltitudeCm());
-        }
-        else
-        {
-            LOGGER_NOTICE("[ULTRA] Kein Signal!");
-        }
+        lastPing = millis();
+        ultrasonic.update();
+    }
+
+    static uint32_t lastPrint = 0;
+    if (millis() - lastPrint >= 200)
+    {
+        lastPrint = millis();
+        // Beide Sensoren einzeln, damit sich die Montage pruefen laesst:
+        // Papier vor EINEN Sensor halten - nur dessen Wert darf springen.
+        LOGGER_NOTICE_FMT("[ULTRA] S1: %.1f cm (%s) | S2: %.1f cm (%s) | Hoehe: %.1f cm (%s) | spread: %.1f",
+                          ultrasonic.getAltitudeCm(0), ultrasonic.isValid(0) ? "ok" : "--",
+                          ultrasonic.getAltitudeCm(1), ultrasonic.isValid(1) ? "ok" : "--",
+                          ultrasonic.getAltitudeCm(),  ultrasonic.isValid()  ? "ok" : "--",
+                          ultrasonic.getSpreadCm());
     }
 }

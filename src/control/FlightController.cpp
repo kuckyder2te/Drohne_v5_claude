@@ -282,9 +282,16 @@ void FlightController::logStatus(const Battery &battery, const Barometer &baro, 
     float alt = ultrasonic.getAltitudeCm();
 #endif
 
-    LOGGER_NOTICE_FMT("[CTRL] Ziel: %.1f cm | Ist: %.1f cm | Thr: %.0f us | Armed: %s | Bat: %.2fV | R/P: %.1f/%.1f | %lu Hz",
+    // "U:" sind die beiden Ultraschall-Rohwerte. Bei Minimum-Fusion bestimmt
+    // immer der kleinere die Regelgroesse - laufen sie auseinander, faellt das
+    // hier im Flug auf, ohne dass jemand 'getDistance' tippen muss.
+    // Puffergrenze beachten: die Zeile liegt damit bei ~117 Zeichen, logBuf ist
+    // 160 (siehe include/myLogger.h). Wer sie verlaengert, muss den Puffer dort
+    // UND in jeder Tool-Kopie mitwachsen lassen.
+    LOGGER_NOTICE_FMT("[CTRL] Ziel: %.1f cm | Ist: %.1f cm | U: %.0f/%.0f | Thr: %.0f us | Armed: %s | Bat: %.2fV | R/P: %.1f/%.1f | %lu Hz",
             _targetHeightCm,
             alt,
+            ultrasonic.getAltitudeCm(0), ultrasonic.getAltitudeCm(1),
             _pidHeight.getLastThrottle(),
             _armed ? "JA" : "NEIN",
             battery.getVoltage(),

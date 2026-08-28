@@ -122,11 +122,11 @@ PIN_NRF_INT   = 21
 PIN_BT_TX     = 0
 PIN_BT_RX     = 1
 
-// ── Ultrasonic HC-SR04 ──────────────────────────
+// ── Ultrasonic HC-SR04 (zwei Sensoren, beide nach unten) ──
 PIN_ULTRASONIC_TRIG1 = 8
 PIN_ULTRASONIC_ECHO1 = 6
-// PIN_ULTRASONIC_TRIG2 = 9  // für späteren Einsatz eines zweiten Sensors reserviert
-// PIN_ULTRASONIC_ECHO2 = 7
+PIN_ULTRASONIC_TRIG2 = 9
+PIN_ULTRASONIC_ECHO2 = 7
 
 // ── Sonstige ────────────────────────────────────
 BUZZER        = 10

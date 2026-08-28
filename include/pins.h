@@ -23,8 +23,7 @@
 #define PIN_ESC_POWER 28
 
 #define PIN_SDA 4
-#define PIN_SCL 5 
-#define PIN_NRF_INT 21     
+#define PIN_SCL 5     
 #define PIN_IMU_INT 3   // ← ICM-20948 INT Pin
 
 // Bluetooth HC-06 (UART0)
@@ -40,10 +39,13 @@
 #define PIN_NRF_INT 21   
 
 // ── Ultrasonic  HC-SR04──────────────────────────
-#define PIN_ULTRASONIC_TRIG1 8 // blue
-#define PIN_ULTRASONIC_ECHO1 6 // white
-// #define PIN_ULTRASONIC_TRIG1 9  // für späteren Einsatz eines zweiten Sensors reserviert
-// #define PIN_ULTRASONIC_ECHO2 7  
+// Zwei Sensoren, beide nach unten gerichtet. Gemessen wird abwechselnd je ein
+// Sensor pro Ultrasonic::update(), fusioniert wird das Minimum - siehe
+// lib/Ultrasonic/Ultrasonic.h.
+#define PIN_ULTRASONIC_TRIG1 7 // yellow
+#define PIN_ULTRASONIC_ECHO1 6 // blue
+#define PIN_ULTRASONIC_TRIG2 9 // green
+#define PIN_ULTRASONIC_ECHO2 8 // purple
 
 // ── Sonstige Pins ────────────────────────────────
 #define BUZZER 10
