@@ -1,6 +1,6 @@
 ---
 name: serial-cli-test
-description: Fährt den seriellen CLI-Test der Drohnen-Firmware über USB/COM11 (SimpleSerialShell) — verbindet, ruft `help`, sweept `setHeight`-Werte und liest per `getHeight` das targetHeightCm-Clamping [5..100] cm zurück. Verwenden, wenn der Nutzer sinngemäß bittet, die serielle CLI / das setHeight-Clamping / targetHeightCm über die Schnittstelle zu testen oder zu verifizieren.
+description: Fährt den seriellen CLI-Test der Drohnen-Firmware über USB/COM11 (SimpleSerialShell) — verbindet, ruft `help`, sweept `setHeight`-Werte und liest per `getHeight` das targetHeightCm-Clamping [10..100] cm zurück. Verwenden, wenn der Nutzer sinngemäß bittet, die serielle CLI / das setHeight-Clamping / targetHeightCm über die Schnittstelle zu testen oder zu verifizieren.
 ---
 
 # Serieller CLI-Test (COM11)
@@ -34,7 +34,7 @@ und liest sie per `getHeight` zurück, um das Clamping zu verifizieren.
   sich im Puffer und verstümmeln das nächste Kommando. Das Skript flusht daher vor
   jedem Kommando mit einem einzelnen `\r`.
 - Befehle: `help`, `getHeight`, `setHeight <cm>`. `setHeight` clampt auf
-  `[THROTTLE_MIN_CM=5 .. MAX_HEIGHT_CM=100]` (siehe [config.h](../../../include/config.h),
+  `[THROTTLE_MIN_CM=10 .. MAX_HEIGHT_CM=100]` (siehe [config.h](../../../include/config.h),
   [cli.cpp](../../../src/comm/cli.cpp), `FlightController::setTargetHeightCm`).
 
 ## Ausführung

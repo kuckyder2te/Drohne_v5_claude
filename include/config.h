@@ -151,10 +151,20 @@
 
 // ── Regelkreis ─────────────────────────────────────────────
 #define PID_INTERVAL_MS 50      // 20 Hz Regelfrequenz
-#define THROTTLE_MIN_CM 5       // Untergrenze Zielhöhe
+// Untergrenze Zielhoehe. Die US-Sensoren sitzen 48 mm ueber dem Boden, am
+// Boden misst der Sensor also schon ~4,8 cm - eine Zielhoehe von 5 hiesse
+// "auf dem Boden stehen bleiben", der Regler wuerde bei laufenden Motoren
+// gegen den Boden regeln. 10 sind ~5 cm echte Bodenfreiheit.
+#define THROTTLE_MIN_CM 10      // Untergrenze Zielhöhe
 #define THROTTLE_OFFSET_US 1500 // Basis-Throttle: Motoren laufen an
 
 // ── Anti-Windup: Liftoff-Schwelle ──────────────────────────
 // Integral-Term aktiv erst wenn Ultraschall > dieser Wert.
 // Anpassen falls Sensor nicht auf Bodenniveau montiert ist.
-#define LIFTOFF_HEIGHT_CM 6.0f  // cm über Boden = "abgehoben"
+//
+// Genau dieser Fall: die US-Sensoren sitzen 48 mm ueber dem Boden, der
+// Ruhewert im Stand ist also ~4,8 cm. Bei den frueheren 6,0f lag das Gate
+// nur 1,2 cm darueber - ein paar zu grosse Messwerte (HC-SR04-Rauschen,
+// unebener Untergrund) haetten gereicht, um die Integratoren aufzuladen,
+// waehrend die Drohne noch steht. 10,0f = ~5 cm echte Bodenfreiheit.
+#define LIFTOFF_HEIGHT_CM 10.0f // cm über Boden = "abgehoben"

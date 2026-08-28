@@ -25,7 +25,7 @@ except ImportError:
           "(~/.platformio/penv/Scripts/python.exe).")
     sys.exit(2)
 
-DEFAULT_HEIGHTS = [-10, -5, 0, 4, 5, 6, 10, 33.3, 50, 99, 100, 100.5, 101, 120, 150]
+DEFAULT_HEIGHTS = [-10, -5, 0, 9, 10, 11, 33.3, 50, 99, 100, 100.5, 101, 120, 150]
 
 
 def main():
