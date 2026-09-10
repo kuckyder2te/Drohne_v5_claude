@@ -5,12 +5,12 @@
 #define PIN_MOTOR_FR 13 // Front Right  green
 #define PIN_MOTOR_BR 14 // Back Right blue
 #define PIN_MOTOR_BL 15 // Back Left white
+#define PIN_ESC_POWER 28
 
 // Farbmarkierung am ESC
 // 1 (A) (weisser Punkt) black
 // 2 (B)                green
 // 3 (C)                yellow
-
 
 // ── ESC-Stromversorgung ──────────────────────────
 // GP28 (Board-Pin 34) schaltet ueber einen Logic-Level-N-FET (IRLZ44N,
@@ -24,9 +24,6 @@
 // da sonst der die ESCs sofort Strom bekommen, sobald die LiPo-Spannung anliegt. Die ESCs müssen über den PIN_ESC_POWER geschaltet werden.
 // Die 5V (rot) werden nicht benötigt
 
-
-
-#define PIN_ESC_POWER 28
 
 #define PIN_SDA 4
 #define PIN_SCL 5     
