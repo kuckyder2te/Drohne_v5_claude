@@ -20,6 +20,12 @@
 // Vom Reset bis zum ersten pinMode() ist der GPIO hochohmig; ohne Pulldown
 // haengt das Gate in der Luft und die ESCs koennen waehrend Reset, BOOTSEL
 // oder Flashen unkontrolliert Strom bekommen.
+// WICHTIG Die Masse-Kabel (braun) der ESCs dürfen nicht mit der Masse des Mainboards verbunden werden, 
+// da sonst der die ESCs sofort Strom bekommen, sobald die LiPo-Spannung anliegt. Die ESCs müssen über den PIN_ESC_POWER geschaltet werden.
+// Die 5V (rot) werden nicht benötigt
+
+
+
 #define PIN_ESC_POWER 28
 
 #define PIN_SDA 4
